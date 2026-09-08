@@ -1,0 +1,10 @@
+-r requirements.txt
+pytest>=7.4
+pytest-cov>=4.1
+responses>=0.24
+ruff>=0.4
+# optional integrations
+gspread>=6.0
+google-auth>=2.23
+streamlit>=1.30
+pandas>=2.0

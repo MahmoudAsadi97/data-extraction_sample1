@@ -1,0 +1,59 @@
+# Built-in schema: product catalogue extracted from an e-commerce / listing website.
+name: products
+label: Products
+entity: product
+fields:
+  - name: title
+    label: Title
+    type: string
+    required: true
+    key: true
+    width: 45
+  - name: price
+    label: Price
+    type: number
+    required: true
+    min: 0
+    width: 10
+  - name: currency
+    label: Currency
+    type: string
+    width: 9
+  - name: rating
+    label: Rating
+    type: integer
+    min: 0
+    max: 5
+    width: 8
+  - name: availability
+    label: Availability
+    type: string
+    width: 14
+  - name: stock
+    label: Stock
+    type: integer
+    min: 0
+    width: 8
+  - name: category
+    label: Category
+    type: string
+    width: 16
+  - name: upc
+    label: UPC / SKU
+    type: string
+    key: true
+    width: 18
+  - name: description
+    label: Description
+    type: text
+    width: 50
+  - name: product_url
+    label: Product URL
+    type: url
+    key: true
+    width: 50
+    verify: Fetched live during the detail-page step.
+  - name: image_url
+    label: Image URL
+    type: url
+    width: 40

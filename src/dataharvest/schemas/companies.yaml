@@ -1,0 +1,89 @@
+# Built-in schema: company profiles (registers, Wikidata, Apollo, CSV seed lists).
+name: companies
+label: Companies
+entity: company
+address_fields: [street, postcode, city, country]
+fields:
+  - name: company_name
+    label: Company name
+    type: string
+    required: true
+    key: true
+    max_length: 200
+    width: 32
+  - name: legal_name
+    label: Legal entity name
+    type: string
+    width: 30
+    verify: Returned by the EU VIES VAT service for a valid VAT number.
+  - name: industry
+    label: Industry
+    type: string
+    width: 28
+  - name: description
+    label: Description
+    type: text
+    width: 40
+  - name: founded
+    label: Founded
+    type: year
+    min: 1500
+    max: 2100
+    width: 9
+  - name: employees
+    label: Employees
+    type: integer
+    min: 0
+    width: 11
+  - name: street
+    label: Street
+    type: string
+    width: 24
+  - name: postcode
+    label: Postcode
+    type: postcode
+    width: 10
+  - name: city
+    label: City / HQ
+    type: string
+    width: 16
+  - name: country
+    label: Country
+    type: string
+    width: 8
+  - name: phone
+    label: Phone
+    type: phone
+    key: true
+    width: 18
+  - name: email
+    label: E-mail
+    type: email
+    key: true
+    width: 28
+  - name: website
+    label: Website
+    type: url
+    key: true
+    width: 32
+  - name: linkedin
+    label: LinkedIn
+    type: social
+    width: 34
+  - name: facebook
+    label: Facebook
+    type: social
+    width: 30
+  - name: instagram
+    label: Instagram
+    type: social
+    width: 30
+  - name: vat_number
+    label: VAT number
+    type: vat
+    width: 16
+  - name: status_note
+    label: Status note
+    type: string
+    width: 22
+    description: e.g. "dissolved 2001" when the source says the company no longer exists.

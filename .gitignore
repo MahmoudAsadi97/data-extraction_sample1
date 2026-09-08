@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DataHarvest project-specific
+data/cache/
+data/output/*
+!data/output/.gitkeep
+!data/output/samples/
+!data/output/samples/**
+.env
+*.sqlite
+.ruff_cache/

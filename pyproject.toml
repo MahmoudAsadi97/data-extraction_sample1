@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dataharvest"
+version = "1.0.0"
+description = "Web data extraction, verification and Excel/Google Sheets delivery toolkit for lead lists and structured databases."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Mahmoud Asadi Heris" }]
+keywords = ["data extraction", "web scraping", "lead generation", "data entry", "excel", "google sheets", "data validation"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "requests>=2.31",
+    "requests-cache>=1.1",
+    "beautifulsoup4>=4.12",
+    "lxml>=4.9",
+    "pyyaml>=6.0",
+    "pydantic>=2.5",
+    "phonenumbers>=8.13",
+    "rapidfuzz>=3.5",
+    "openpyxl>=3.1",
+    "dnspython>=2.4",
+    "typer>=0.12",
+    "rich>=13.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+gsheets = ["gspread>=6.0", "google-auth>=2.23"]
+ui = ["streamlit>=1.30", "pandas>=2.0"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "responses>=0.24", "ruff>=0.4"]
+all = ["gspread>=6.0", "google-auth>=2.23", "streamlit>=1.30", "pandas>=2.0"]
+
+[project.scripts]
+dataharvest = "dataharvest.cli:app"
+
+[project.urls]
+Repository = "https://github.com/MahmoudAsadi97/data-extraction_sample1"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dataharvest = ["schemas/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "network: tests that need internet access (deselected by default in CI: -m 'not network')",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/dataharvest/cli.py" = ["B008"]  # typer's declarative Option()/Argument() defaults
+
+[tool.coverage.run]
+source = ["dataharvest"]

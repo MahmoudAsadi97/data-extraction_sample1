@@ -1,0 +1,111 @@
+# Built-in schema: local business / B2B lead list.
+name: leads
+label: Leads
+entity: company
+address_fields: [street, house_number, postcode, city, country]
+fields:
+  - name: company_name
+    label: Company name
+    type: string
+    required: true
+    key: true
+    max_length: 200
+    width: 32
+    description: Trade name of the business as it presents itself publicly.
+    verify: Present in the primary source; confirmed when found on the company's own website.
+  - name: legal_name
+    label: Legal entity name
+    type: string
+    width: 30
+    description: Registered legal name (from the VAT register), when it differs from the trade name.
+    verify: Returned by the EU VIES VAT service for a valid VAT number.
+  - name: category
+    label: Category
+    type: string
+    required: true
+    width: 16
+    description: Main business category (e.g. restaurant, cafe, software company).
+  - name: subcategory
+    label: Subcategory
+    type: string
+    width: 18
+    description: Finer classification (e.g. cuisine type, industry).
+  - name: street
+    label: Street
+    type: string
+    width: 24
+  - name: house_number
+    label: No.
+    type: string
+    width: 7
+  - name: postcode
+    label: Postcode
+    type: postcode
+    width: 10
+    verify: Format checked for the project country.
+  - name: city
+    label: City
+    type: string
+    width: 14
+  - name: district
+    label: District
+    type: string
+    width: 12
+    description: Sub-municipality / neighbourhood when known.
+  - name: country
+    label: Country
+    type: string
+    width: 8
+    description: ISO 3166-1 alpha-2 code.
+  - name: phone
+    label: Phone
+    type: phone
+    key: true
+    width: 18
+    verify: Parsed and validated with libphonenumber; confirmed when the same number appears on the website.
+  - name: email
+    label: E-mail
+    type: email
+    key: true
+    width: 28
+    verify: Syntax check + mail-domain (MX) lookup; confirmed when found on the company's website.
+  - name: website
+    label: Website
+    type: url
+    key: true
+    width: 32
+    verify: Fetched live; confirmed when the company name appears on the page.
+  - name: linkedin
+    label: LinkedIn
+    type: social
+    width: 34
+    verify: Link found on the company's own website or supplied by the source.
+  - name: facebook
+    label: Facebook
+    type: social
+    width: 30
+  - name: instagram
+    label: Instagram
+    type: social
+    width: 30
+  - name: vat_number
+    label: VAT number
+    type: vat
+    width: 16
+    verify: Checksum validated; existence and registered name checked with the EU VIES service.
+  - name: opening_hours
+    label: Opening hours
+    type: text
+    width: 30
+  - name: description
+    label: Description
+    type: text
+    width: 40
+  - name: latitude
+    label: Latitude
+    type: latitude
+    width: 11
+  - name: longitude
+    label: Longitude
+    type: longitude
+    width: 11
