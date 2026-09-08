@@ -26,7 +26,7 @@ class TestEmail:
     @pytest.mark.parametrize(
         "raw, expected",
         [
-            ("Info@Example.BE", "Info@example.be"),
+            ("Info@Example.BE", "info@example.be"),
             ("mailto:info@hollywok.be?subject=hi", "info@hollywok.be"),
             ("info [at] brasseriedeleie [dot] be", "info@brasseriedeleie.be"),
             ("<sales@shop.com>", "sales@shop.com"),

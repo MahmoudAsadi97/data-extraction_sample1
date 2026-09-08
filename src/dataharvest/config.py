@@ -31,6 +31,11 @@ class ProjectInfo(BaseModel):
     deadline: str = ""
     instructions: str = ""  # free text: the brief, as received
 
+    @field_validator("deadline", "title", "client", "requested_by", mode="before")
+    @classmethod
+    def _stringify(cls, v: Any) -> Any:
+        return "" if v is None else (v if isinstance(v, str) else str(v))  # YAML turns 2026-10-01 into a date
+
     @field_validator("name")
     @classmethod
     def _slug(cls, v: str) -> str:

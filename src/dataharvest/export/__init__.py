@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,20 @@ log = logging.getLogger(__name__)
 __all__ = ["export_all", "export_excel", "export_csv", "export_json", "export_google_sheets", "GoogleSheetsUnavailable"]
 
 
+def _write(pipeline: Pipeline, kind: str, path: Path, writer) -> Path | None:
+    """Write one output; if the target is locked (open in Excel on Windows) fall back to a timestamped name."""
+    try:
+        return writer(path)
+    except PermissionError:
+        alt = path.with_name(f"{path.stem}_{datetime.now().strftime('%H%M%S')}{path.suffix}")
+        pipeline.report.warn(f"{path.name} is locked (open in another program?) - written as {alt.name} instead")
+        try:
+            return writer(alt)
+        except PermissionError as exc:
+            pipeline.report.warn(f"{kind} export failed: {exc}")
+            return None
+
+
 def export_all(pipeline: Pipeline) -> dict[str, Path]:
     cfg = pipeline.config
     directory, basename = pipeline.output_paths()
@@ -25,13 +40,18 @@ def export_all(pipeline: Pipeline) -> dict[str, Path]:
     project_info = cfg.project.model_dump()
     outputs: dict[str, Path] = {}
     formats = cfg.output.formats
-    if "xlsx" in formats:
-        outputs["xlsx"] = export_excel(directory / f"{basename}.xlsx", pipeline.records, pipeline.groups, pipeline.report,
-                                       pipeline.schema, project_info, include_excluded=cfg.output.include_excluded)
-    if "csv" in formats:
-        outputs["csv"] = export_csv(directory / f"{basename}.csv", pipeline.records, pipeline.schema)
+    # plain-text formats first: they never fail on a file lock, so a run is never lost entirely
     if "json" in formats:
-        outputs["json"] = export_json(directory / f"{basename}.json", pipeline.records, pipeline.groups, pipeline.report, pipeline.schema)
+        outputs["json"] = _write(pipeline, "json", directory / f"{basename}.json",
+                                 lambda path: export_json(path, pipeline.records, pipeline.groups, pipeline.report, pipeline.schema))
+    if "csv" in formats:
+        outputs["csv"] = _write(pipeline, "csv", directory / f"{basename}.csv",
+                                lambda path: export_csv(path, pipeline.records, pipeline.schema))
+    if "xlsx" in formats:
+        outputs["xlsx"] = _write(pipeline, "xlsx", directory / f"{basename}.xlsx",
+                                 lambda path: export_excel(path, pipeline.records, pipeline.groups, pipeline.report, pipeline.schema,
+                                                           project_info, include_excluded=cfg.output.include_excluded))
+    outputs = {k: v for k, v in outputs.items() if v is not None}
     gs = cfg.output.google_sheets
     if gs.enabled:
         try:

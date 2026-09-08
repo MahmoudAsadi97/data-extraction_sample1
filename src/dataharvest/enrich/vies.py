@@ -84,7 +84,7 @@ class ViesClient:
         for attempt in range(3):
             self.requests_made += 1
             try:
-                resp = self.http.get(url, timeout=20, min_delay=self.delay)
+                resp = self.http.get(url, timeout=20, min_delay=self.delay, use_cache=attempt == 0)
                 data = resp.json() if resp.content else {}
             except (requests.RequestException, ValueError) as exc:
                 last_error = f"request failed: {exc}"

@@ -193,7 +193,14 @@ class OsmOverpassSource(BaseSource):
                     time.sleep(2)
                     continue
                 resp.raise_for_status()
-                return resp.json()
+                data = resp.json()
+                remark = str(data.get("remark", ""))
+                if "runtime error" in remark.lower() or (not data.get("elements") and remark):
+                    log.warning("Overpass %s: %s", endpoint, remark)
+                    last_error = RuntimeError(remark)
+                    time.sleep(2)
+                    continue  # timeout / overload on this mirror - try the next one
+                return data
             except (requests.RequestException, ValueError) as exc:
                 last_error = exc
                 log.warning("Overpass request to %s failed: %s", endpoint, exc)

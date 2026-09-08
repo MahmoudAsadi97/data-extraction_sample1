@@ -78,6 +78,8 @@ class SiteExtraction:
     name_similarity: int = 0
     text_sample: str = ""
     from_cache: bool = False
+    blocked: bool = False
+    note: str = ""  # informational (e.g. reached over http instead of https)
 
     @property
     def liveness(self) -> str:
@@ -85,6 +87,8 @@ class SiteExtraction:
             if self.final_url and url_domain(self.final_url) != url_domain(self.url):
                 return "redirected"
             return "live"
+        if self.blocked:
+            return "blocked"  # robots.txt, bot challenge or rate limit: could not be checked, not proven dead
         if self.status and 400 <= self.status < 600:
             return "dead"
         return "unreachable"
@@ -221,14 +225,26 @@ class WebsiteEnricher:
 
     def analyse(self, url: str, company_name: str | None = None) -> SiteExtraction:
         first: FetchResult = self.http.fetch(url, check_robots=self.respect_robots, timeout=self.timeout)
+        if not first.ok and not first.blocked and first.status is None and url.lower().startswith("https://"):
+            # many small-business sites still have no TLS: a connection/SSL failure on https is retried on http
+            retry = self.http.fetch("http://" + url[8:], check_robots=self.respect_robots, timeout=self.timeout)
+            if retry.ok:
+                retry.error = "https not available - reached over plain http"
+                first = retry
         result = SiteExtraction(url=url, ok=first.ok, status=first.status, final_url=first.final_url or url,
-                                error=first.error, from_cache=first.from_cache)
+                                error=first.error, from_cache=first.from_cache, blocked=first.blocked)
+        http_note = first.error if first.ok and first.error else ""
+        result.error = ""
         if first.ok and not first.text.strip():
             result.error = "empty response"
         if not first.ok or not first.is_html:
-            if first.ok and not first.is_html:
+            if not first.ok:
+                result.error = first.error
+            elif not first.is_html:
                 result.error = f"not an HTML page ({first.content_type or 'unknown type'})"
             return result
+        result.error = ""
+        result.note = http_note
         pages = [(result.final_url, first.text)]
         soup = BeautifulSoup(first.text, "lxml")
         for extra in _candidate_pages(soup, result.final_url, self.max_pages):

@@ -117,13 +117,18 @@ def run(
             tasks[stage] = progress.add_task(stage, total=max(total, 1))
         progress.update(tasks[stage], completed=done, total=max(total, 1))
 
+    pipeline = Pipeline(cfg, limit=limit or None, offline=offline, no_cache=no_cache, progress=on_progress)
     with progress:
         try:
-            pipeline = Pipeline(cfg, limit=limit or None, offline=offline, no_cache=no_cache, progress=on_progress)
             result = pipeline.run(export=not no_export)
         except SourceError as exc:
             err_console.print(f"[red]Extraction failed:[/red] {exc}")
+            for w in pipeline.report.warnings:
+                err_console.print(f"  - {w}")
             raise typer.Exit(1) from None
+        except KeyboardInterrupt:
+            err_console.print("[yellow]Interrupted - no files were written.[/yellow]")
+            raise typer.Exit(130) from None
 
     _print_summary(result)
 

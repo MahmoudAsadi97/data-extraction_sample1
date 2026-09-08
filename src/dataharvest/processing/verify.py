@@ -59,15 +59,19 @@ class MailDomainChecker:
                 hosts = sorted(str(r.exchange).rstrip(".") for r in answers)
                 if hosts and hosts != [""]:
                     return MxResult(domain, True, f"MX: {hosts[0]}")
-            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
                 pass
+            except dns.resolver.NoNameservers:
+                raise RuntimeError("resolver returned SERVFAIL/REFUSED") from None  # transient: fall back to DoH
             try:
                 resolver.resolve(domain, "A")
                 return MxResult(domain, True, "no MX record, but domain resolves (A record)")
             except dns.resolver.NXDOMAIN:
                 return MxResult(domain, False, "domain does not exist (NXDOMAIN)")
-            except (dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+            except dns.resolver.NoAnswer:
                 return MxResult(domain, False, "no MX and no A record")
+            except dns.resolver.NoNameservers:
+                raise RuntimeError("resolver returned SERVFAIL/REFUSED") from None
         except ImportError:
             pass
         except Exception as exc:  # timeouts, no network

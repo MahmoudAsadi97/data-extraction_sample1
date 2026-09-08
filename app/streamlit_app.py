@@ -84,12 +84,14 @@ if run_clicked:
         pct = int(100 * done / max(total, 1))
         bar.progress(min(pct, 100), text=f"{stage}: {done}/{total}")
 
+    pipeline = Pipeline(cfg, limit=int(limit) or None, offline=offline, no_cache=no_cache, progress=on_progress)
     try:
         with st.spinner("Running pipeline…"):
-            pipeline = Pipeline(cfg, limit=int(limit) or None, offline=offline, no_cache=no_cache, progress=on_progress)
             result = pipeline.run(export=True)
     except SourceError as exc:
         st.error(f"Extraction failed: {exc}")
+        for w in pipeline.report.warnings:
+            st.warning(w)
         st.stop()
     bar.progress(100, text="done")
     st.session_state["result"] = result
@@ -128,7 +130,7 @@ with tab_data:
     query = st.text_input("Search (name, e-mail, website…)")
     view = df[df["Verification status"].isin(statuses)]
     if query:
-        mask = view.astype(str).apply(lambda col: col.str.contains(query, case=False, na=False)).any(axis=1)
+        mask = view.astype(str).apply(lambda col: col.str.contains(query, case=False, na=False, regex=False)).any(axis=1)
         view = view[mask]
     st.caption(f"{len(view)} of {len(df)} delivered records")
     st.dataframe(view.style.map(colour_status, subset=["Verification status"]), use_container_width=True, height=520)

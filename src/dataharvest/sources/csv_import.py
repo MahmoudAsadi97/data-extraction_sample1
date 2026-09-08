@@ -53,15 +53,18 @@ def read_rows(path: Path, encoding: str = "utf-8-sig", sheet: str | None = None)
         from openpyxl import load_workbook
 
         wb = load_workbook(path, read_only=True, data_only=True)
-        ws = wb[sheet] if sheet else wb.active
-        rows_iter = ws.iter_rows(values_only=True)
-        header = [str(h).strip() if h is not None else "" for h in next(rows_iter, [])]
-        rows = []
-        for row in rows_iter:
-            if row is None or all(v in (None, "") for v in row):
-                continue
-            rows.append({header[i]: row[i] for i in range(min(len(header), len(row))) if header[i]})
-        return rows
+        try:
+            ws = wb[sheet] if sheet else wb.active
+            rows_iter = ws.iter_rows(values_only=True)
+            header = [str(h).strip() if h is not None else "" for h in next(rows_iter, [])]
+            rows = []
+            for row in rows_iter:
+                if row is None or all(v in (None, "") for v in row):
+                    continue
+                rows.append({header[i]: row[i] for i in range(min(len(header), len(row))) if header[i]})
+            return rows
+        finally:
+            wb.close()  # read-only workbooks keep the file open (and locked on Windows) until closed
     with path.open("r", encoding=encoding, newline="") as fh:
         sample = fh.read(4096)
         fh.seek(0)

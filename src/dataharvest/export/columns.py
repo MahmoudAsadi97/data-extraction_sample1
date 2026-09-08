@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,6 +11,14 @@ from ..processing.normalize import format_phone_display
 from ..schema import FieldDef, Schema
 
 CHECK_FIELDS = ("company_name", "name", "title", "website", "email", "phone", "vat_number")
+_ILLEGAL_XML_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def spreadsheet_safe(value: Any) -> Any:
+    """Strip control characters spreadsheets reject; keep everything else as-is."""
+    if isinstance(value, str):
+        return _ILLEGAL_XML_RE.sub("", value)
+    return value
 
 
 @dataclass
@@ -84,4 +93,4 @@ def cell_value(rec: Record, col: Column, *, country: str = "BE") -> Any:
 
 
 def record_row(rec: Record, columns: list[Column], *, country: str = "BE") -> list[Any]:
-    return [cell_value(rec, c, country=country) for c in columns]
+    return [spreadsheet_safe(cell_value(rec, c, country=country)) for c in columns]

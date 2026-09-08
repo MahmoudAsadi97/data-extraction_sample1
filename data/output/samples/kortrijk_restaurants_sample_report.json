@@ -6,7 +6,7 @@
     "name": "kortrijk_restaurants",
     "title": "Restaurants & cafés in Kortrijk (BE) - verified lead list"
   },
-  "started_at": "2026-09-08T08:53:56+00:00",
+  "started_at": "2026-09-08T09:30:49+00:00",
   "records_total": 60,
   "records_delivered": 54,
   "status_counts": {
@@ -79,7 +79,7 @@
   "stages": [
     {
       "name": "extract",
-      "seconds": 0.01,
+      "seconds": 0.0,
       "input": 0,
       "output": 60,
       "notes": [
@@ -129,11 +129,11 @@
     },
     {
       "name": "export",
-      "seconds": 0.12,
+      "seconds": 0.1,
       "input": 0,
       "output": 2,
       "notes": [
-        "xlsx, csv"
+        "csv, xlsx"
       ]
     }
   ],
@@ -181,7 +181,7 @@
     }
   },
   "outputs": {
-    "xlsx": "data/output/samples/kortrijk_restaurants_sample.xlsx",
-    "csv": "data/output/samples/kortrijk_restaurants_sample.csv"
+    "csv": "data/output/samples/kortrijk_restaurants_sample.csv",
+    "xlsx": "data/output/samples/kortrijk_restaurants_sample.xlsx"
   }
 }

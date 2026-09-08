@@ -7,6 +7,7 @@ to switch off in tests.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import threading
@@ -39,6 +40,7 @@ class FetchResult:
     error: str = ""
     from_cache: bool = False
     elapsed: float = 0.0
+    blocked: bool = False  # access refused (robots.txt, bot challenge, rate limit) - not proof the site is dead
 
     @property
     def is_html(self) -> bool:
@@ -95,6 +97,7 @@ class HttpClient:
                     expire_after=expire_hours * 3600,
                     allowable_methods=("GET", "POST"),
                     allowable_codes=(200, 203, 300, 301, 302, 404, 410),
+                    filter_fn=cacheable,
                     stale_if_error=True,
                 )
             except Exception as exc:  # pragma: no cover - cache is optional
@@ -107,7 +110,8 @@ class HttpClient:
             backoff_factor=0.8,
             status_forcelist=(429, 500, 502, 503, 504),
             allowed_methods=frozenset({"GET", "HEAD", "POST"}),
-            respect_retry_after_header=True,
+            respect_retry_after_header=False,  # never let one site's Retry-After (minutes/hours) stall a worker
+            raise_on_status=False,  # hand the final 4xx/5xx response back instead of raising RetryError
         )
         adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=40)
         session.mount("https://", adapter)
@@ -162,18 +166,27 @@ class HttpClient:
     # ------------------------------------------------------------------ requests
     def get(self, url: str, *, params: dict | None = None, headers: dict | None = None,
             timeout: float | None = None, min_delay: float | None = None, allow_redirects: bool = True,
-            check_robots: bool = False, stream: bool = False) -> requests.Response:
+            check_robots: bool = False, stream: bool = False, use_cache: bool = True) -> requests.Response:
         """Low-level GET with politeness. Raises requests exceptions."""
         if check_robots and not self.allowed_by_robots(url):
             raise PermissionError(f"Blocked by robots.txt: {url}")
         self._wait_for_host(urlparse(url).netloc, min_delay)
-        return self.session.get(url, params=params, headers=headers, timeout=timeout or self.timeout,
-                                allow_redirects=allow_redirects, stream=stream)
+        with self._cache_scope(use_cache):
+            return self.session.get(url, params=params, headers=headers, timeout=timeout or self.timeout,
+                                    allow_redirects=allow_redirects, stream=stream)
 
     def post(self, url: str, *, data=None, json=None, headers: dict | None = None,
-             timeout: float | None = None, min_delay: float | None = None) -> requests.Response:
+             timeout: float | None = None, min_delay: float | None = None, use_cache: bool = True) -> requests.Response:
         self._wait_for_host(urlparse(url).netloc, min_delay)
-        return self.session.post(url, data=data, json=json, headers=headers, timeout=timeout or self.timeout)
+        with self._cache_scope(use_cache):
+            return self.session.post(url, data=data, json=json, headers=headers, timeout=timeout or self.timeout)
+
+    def _cache_scope(self, use_cache: bool):
+        """Context manager that bypasses the on-disk cache for one request when asked."""
+        disabler = getattr(self.session, "cache_disabled", None)
+        if use_cache or disabler is None:
+            return contextlib.nullcontext()
+        return disabler()
 
     def fetch(self, url: str, *, check_robots: bool = True, timeout: float | None = None,
               min_delay: float | None = None, headers: dict | None = None) -> FetchResult:
@@ -183,7 +196,7 @@ class HttpClient:
             url = "https://" + url
         try:
             if check_robots and not self.allowed_by_robots(url):
-                return FetchResult(url=url, ok=False, error="blocked by robots.txt")
+                return FetchResult(url=url, ok=False, error="blocked by robots.txt", blocked=True)
             resp = self.get(url, timeout=timeout, min_delay=min_delay, headers=headers, stream=True)
             ctype = resp.headers.get("Content-Type", "")
             body = b""
@@ -202,6 +215,7 @@ class HttpClient:
                 content_type=ctype,
                 from_cache=bool(getattr(resp, "from_cache", False)),
                 elapsed=time.monotonic() - started,
+                blocked=resp.status_code in (401, 403, 429, 503) and _looks_like_challenge(resp, text),
             )
         except requests.exceptions.SSLError as exc:
             return FetchResult(url=url, ok=False, error=f"ssl error: {_short(exc)}", elapsed=time.monotonic() - started)
@@ -215,8 +229,8 @@ class HttpClient:
             return FetchResult(url=url, ok=False, error=f"error: {_short(exc)}", elapsed=time.monotonic() - started)
 
     def get_json(self, url: str, *, params: dict | None = None, headers: dict | None = None,
-                 timeout: float | None = None, min_delay: float | None = None):
-        resp = self.get(url, params=params, headers=headers, timeout=timeout, min_delay=min_delay)
+                 timeout: float | None = None, min_delay: float | None = None, use_cache: bool = True):
+        resp = self.get(url, params=params, headers=headers, timeout=timeout, min_delay=min_delay, use_cache=use_cache)
         resp.raise_for_status()
         return resp.json()
 
@@ -229,6 +243,34 @@ class HttpClient:
 
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset=["']?\s*([A-Za-z0-9_\-]+)""", re.IGNORECASE)
 _HEADER_CHARSET = re.compile(r"charset=([A-Za-z0-9_\-]+)", re.IGNORECASE)
+
+
+_CHALLENGE_RE = re.compile(r"cloudflare|captcha|access denied|just a moment|bot detection|rate limit|too many requests|attention required", re.IGNORECASE)
+
+
+def _looks_like_challenge(resp: requests.Response, text: str) -> bool:
+    if resp.status_code in (401, 429):
+        return True
+    server = (resp.headers.get("Server") or "").lower()
+    return bool(_CHALLENGE_RE.search(text[:5000])) or "cloudflare" in server or "cf-ray" in {k.lower() for k in resp.headers}
+
+
+def cacheable(response: requests.Response) -> bool:
+    """requests-cache filter: never store answers that are really transient errors."""
+    url = response.url or ""
+    try:
+        if "/api/interpreter" in url:  # Overpass answers HTTP 200 with a 'remark' on timeouts/overload
+            data = response.json()
+            remark = str(data.get("remark", ""))
+            return not ("runtime error" in remark.lower() or (not data.get("elements") and remark))
+        if "vies/rest-api" in url:  # VIES busy/unavailable answers come back as HTTP 200 too
+            data = response.json()
+            if data.get("errorWrappers"):
+                return False
+            return str(data.get("userError", "")).upper() in ("", "VALID", "INVALID")
+    except ValueError:
+        return False
+    return True
 
 
 def decode_body(body: bytes, content_type: str = "") -> str:

@@ -17,7 +17,7 @@ from ..models import DuplicateGroup, Record, RecordStatus
 from ..processing.normalize import format_phone_display
 from ..report import RunReport
 from ..schema import Schema
-from .columns import Column, build_columns, record_row
+from .columns import Column, build_columns, record_row, spreadsheet_safe
 
 HEADER_FILL = PatternFill("solid", fgColor="1F4E78")
 HEADER_FONT = Font(bold=True, color="FFFFFF")
@@ -49,6 +49,14 @@ def _display(rec: Record, name: str, schema: Schema) -> Any:
     return value
 
 
+def _put(ws: Worksheet, row: int, column: int, value: Any):
+    """Write a data cell; text that starts with '=' stays text instead of becoming a formula."""
+    cell = ws.cell(row=row, column=column, value=spreadsheet_safe(value))
+    if isinstance(value, str) and value.startswith("="):
+        cell.data_type = "s"
+    return cell
+
+
 def _style_header(ws: Worksheet, row: int, ncols: int) -> None:
     for c in range(1, ncols + 1):
         cell = ws.cell(row=row, column=c)
@@ -69,7 +77,7 @@ def _write_table(ws: Worksheet, headers: list[str], rows: list[list[Any]], start
     for r_off, row in enumerate(rows, start=1):
         r = start_row + r_off
         for c, value in enumerate(row, start=1):
-            cell = ws.cell(row=r, column=c, value=value)
+            cell = _put(ws, r, c, value)
             cell.border = BORDER
             cell.alignment = Alignment(vertical="top", wrap_text=bool(wrap_cols and c in wrap_cols))
     if widths:
@@ -111,7 +119,7 @@ def write_data_sheet(ws: Worksheet, records: list[Record], columns: list[Column]
     _style_header(ws, 1, len(columns))
     for r, rec in enumerate(records, start=2):
         for c, (col, value) in enumerate(zip(columns, record_row(rec, columns), strict=True), start=1):
-            cell = ws.cell(row=r, column=c, value=value)
+            cell = _put(ws, r, c, value)
             cell.border = BORDER
             cell.alignment = Alignment(vertical="top", wrap_text=col.wrap)
             if col.number_format and isinstance(value, (int, float)):
@@ -320,7 +328,7 @@ def write_run_log_sheet(ws: Worksheet, report: RunReport, project_info: dict[str
     ]
     for k, v in info:
         ws.cell(row=r, column=1, value=k).font = BOLD
-        ws.cell(row=r, column=2, value=v if v not in (None, "") else "-")
+        _put(ws, r, 2, v if v not in (None, "") else "-")
         r += 1
     r += 1
     headers = ["Stage", "Input", "Output", "Seconds", "Notes"]
@@ -330,7 +338,7 @@ def write_run_log_sheet(ws: Worksheet, report: RunReport, project_info: dict[str
     r += 1
     if report.warnings:
         for w in report.warnings:
-            ws.cell(row=r, column=1, value=w)
+            _put(ws, r, 1, w)
             ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
             ws.cell(row=r, column=1).alignment = Alignment(wrap_text=True)
             r += 1

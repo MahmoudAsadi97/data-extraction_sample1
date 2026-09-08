@@ -166,8 +166,9 @@ class Pipeline:
         name_field = self.schema.name_field or "company_name"
         done = 0
         self.progress(stage_name, 0, len(targets))
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-            futures = {pool.submit(enricher.analyse, str(r.get("website")), r.get(name_field)): r for r in targets}
+        pool = ThreadPoolExecutor(max_workers=max(1, workers))
+        futures = {pool.submit(enricher.analyse, str(r.get("website")), r.get(name_field)): r for r in targets}
+        try:
             for fut in as_completed(futures):
                 rec = futures[fut]
                 try:
@@ -178,6 +179,10 @@ class Pipeline:
                     rec.mark("website", FieldStatus.UNVERIFIED, f"enrichment error: {str(exc)[:80]}")
                 done += 1
                 self.progress(stage_name, done, len(targets))
+        except KeyboardInterrupt:
+            pool.shutdown(wait=False, cancel_futures=True)  # stop queued fetches immediately on Ctrl+C
+            raise
+        pool.shutdown(wait=True)
 
     def _apply_site_extraction(self, rec: Record, site: SiteExtraction) -> None:
         rec.checks["website"] = {
@@ -189,6 +194,10 @@ class Pipeline:
         via_search = website_source.startswith("search")
         if not site.ok:
             detail = site.error or f"HTTP {site.status}"
+            if site.liveness == "blocked":
+                rec.mark("website", FieldStatus.UNVERIFIED, f"could not be checked automatically ({detail})")
+                rec.flag(f"note: website could not be checked automatically ({detail}) - open it manually")
+                return
             rec.mark("website", FieldStatus.INVALID, f"{site.liveness}: {detail}")
             rec.flag(f"website unreachable ({detail})")
             return
@@ -197,6 +206,8 @@ class Pipeline:
             return
         site_domain = url_domain(site.final_url)
         note_parts = [f"live (HTTP {site.status})"]
+        if site.note:
+            note_parts.append(site.note)
         if site.liveness == "redirected":
             note_parts.append(f"redirects to {site.final_url}")
             rec.add_candidate("website", site.final_url)
@@ -218,7 +229,7 @@ class Pipeline:
         own_emails = [e for e in site.emails if site_domain and (email_domain(e) or "").endswith(site_domain)]
         current_email = rec.get("email")
         if current_email:
-            if current_email in site.emails:
+            if str(current_email).lower() in site.emails:
                 rec.mark("email", FieldStatus.VERIFIED, "confirmed on company website", append_note=False)
             elif own_emails:
                 for e in own_emails[:3]:

@@ -28,7 +28,7 @@ class TestValidation:
     def test_normalises_and_flags_unusable_values(self):
         rec = make("R1", company_name=" Hollywok ", phone="056/20.55.88", email="Info@Hollywok.BE", website="hollywok.be", postcode="B-8500", latitude="999")
         normalize_record(rec, LEADS, "BE")
-        assert rec.get("phone") == "+3256205588" and rec.get("email") == "Info@hollywok.be" and rec.get("website") == "https://hollywok.be/"
+        assert rec.get("phone") == "+3256205588" and rec.get("email") == "info@hollywok.be" and rec.get("website") == "https://hollywok.be/"
         assert rec.get("postcode") == "8500"
         assert rec.get("latitude") is None and rec.field_status("latitude") == FieldStatus.INVALID
         assert any("latitude" in f for f in rec.flags)

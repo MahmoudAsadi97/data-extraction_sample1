@@ -82,8 +82,7 @@ def normalize_email(value: Any) -> str | None:
     if "@" not in text:
         return None
     local, _, domain = text.rpartition("@")
-    email = f"{local}@{domain.lower()}"
-    return email
+    return f"{local}@{domain}".lower()  # local parts are case-insensitive in practice; one form makes matching reliable
 
 
 def is_valid_email(value: str | None) -> bool:

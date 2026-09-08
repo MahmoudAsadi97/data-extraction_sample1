@@ -1,7 +1,7 @@
 # Run report - Restaurants & cafés in Kortrijk (BE) - verified lead list
 
 - Project: `kortrijk_restaurants`  
-- Started: 2026-09-08T08:53:56+00:00  
+- Started: 2026-09-08T09:30:49+00:00  
 - Tool: DataHarvest 1.0.0 on Python 3.11.15  
 - Records extracted: **60**, delivered: **54** (excluded/merged: 6)  
 - Duplicate groups: 5
@@ -76,15 +76,15 @@
 
 | Stage | In | Out | Seconds | Notes |
 |---|---|---|---|---|
-| extract | 0 | 60 | 0.01 | osm: 60 |
+| extract | 0 | 60 | 0.0 | osm: 60 |
 | normalise | 60 | 60 | 0.0 |  |
 | verify: e-mail domains & phones | 60 | 60 | 0.0 | offline: mail domains not checked |
 | validate | 60 | 60 | 0.0 | 8 problem(s) flagged |
 | dedupe | 60 | 58 | 0.02 | 5 group(s), 2 record(s) merged |
 | finalise | 60 | 54 | 0.0 |  |
-| export | 0 | 2 | 0.12 | xlsx, csv |
+| export | 0 | 2 | 0.1 | csv, xlsx |
 
 ## Output files
 
-- xlsx: `data/output/samples/kortrijk_restaurants_sample.xlsx`
 - csv: `data/output/samples/kortrijk_restaurants_sample.csv`
+- xlsx: `data/output/samples/kortrijk_restaurants_sample.xlsx`
