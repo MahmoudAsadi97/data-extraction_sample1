@@ -1,0 +1,14 @@
+{
+  "isValid" : true,
+  "requestDate" : "2026-09-08T07:02:08.535Z",
+  "userError" : "VALID",
+  "name" : "BV HUMICO",
+  "address" : "Kleine Pontestraat 5\n8510 Kortrijk",
+  "requestIdentifier" : "",
+  "originalVatNumber" : "0629985405",
+  "vatNumber" : "0629985405",
+  "viesApproximate" : {
+    "name" : "---", "street" : "---", "postalCode" : "---", "city" : "---", "companyType" : "---",
+    "matchName" : 3, "matchStreet" : 3, "matchPostalCode" : 3, "matchCity" : 3, "matchCompanyType" : 3
+  }
+}
