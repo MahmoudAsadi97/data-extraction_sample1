@@ -173,13 +173,14 @@ output:
 ```
 
 Schemas define the columns and their validation (`src/dataharvest/schemas/*.yaml`); a project can also
-declare its own `fields:` inline. Field types drive the checks: `email`, `url`, `phone`, `postcode`,
+declare its own `fields:` inline, or adjust a built-in one with `schema_overrides:` (for example
+`category: {required: false}` when a client list has no category column). Field types drive the checks: `email`, `url`, `phone`, `postcode`,
 `vat`, `social`, `number`, `integer`, `year`, `date`, `enum`, `latitude`, `longitude`, `string`, `text`.
 
 ## Auditing an existing spreadsheet
 
 ```bash
-dataharvest validate client_list.xlsx --schema leads --country BE
+dataharvest validate client_list.xlsx --schema leads --country BE -m "Tel=phone" --optional category
 ```
 
 Maps the columns automatically (labels, field names and common aliases such as *Company*, *Tel*, *E-mail*),
@@ -191,6 +192,10 @@ column and a Needs Review sheet.
 
 `dataharvest ui` opens a Streamlit page: choose a project, toggle enrichment steps, run with a progress
 bar, filter/search the result, inspect review flags and duplicates, and download the files.
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="800">
+</p>
 
 ## Testing
 

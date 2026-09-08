@@ -32,6 +32,21 @@ def project(tmp_path: Path, **overrides) -> ProjectConfig:
     return cfg
 
 
+class TestSchemaOverrides:
+    def test_overrides_change_required_flag(self, tmp_path):
+        from dataharvest.schema import apply_overrides, load_schema
+
+        cfg = project(tmp_path, schema_overrides={"category": {"required": False}})
+        assert cfg.schema_def.field("category").required is False
+        assert load_schema("leads").field("category").required is True  # built-in schema untouched
+        try:
+            apply_overrides(load_schema("leads"), {"nope": {"required": False}})
+        except ValueError as exc:
+            assert "unknown field" in str(exc)
+        else:  # pragma: no cover
+            raise AssertionError("expected ValueError")
+
+
 class TestRegistry:
     def test_all_sources_registered(self):
         assert set(all_sources()) >= {"osm_overpass", "wikidata", "html_list", "csv_import", "google_places", "apollo"}

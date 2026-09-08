@@ -167,6 +167,13 @@ class TestCli:
             assert runner.invoke(app, ["init", f"p_{template}", "--template", template, "--dir", str(tmp_path)]).exit_code == 0
             load_project(tmp_path / f"p_{template}.yaml")
 
+    def test_validate_optional_and_mapping_flags(self, tmp_path):
+        path = tmp_path / "seed.csv"
+        shutil.copy(FIXTURES / "seed_list.csv", path)
+        out = runner.invoke(app, ["validate", str(path), "--optional", "category", "-m", "Notes=description"])
+        assert out.exit_code == 0, out.stdout
+        assert "missing required field: category" not in out.stdout
+
     def test_validate_command(self, tmp_path):
         path = tmp_path / "seed.csv"
         shutil.copy(FIXTURES / "seed_list.csv", path)

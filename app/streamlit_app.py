@@ -121,7 +121,8 @@ tab_data, tab_review, tab_dups, tab_report, tab_files = st.tabs(["Data", "Needs 
 
 with tab_data:
     delivered = [r for r in result.records if r.status != RecordStatus.EXCLUDED]
-    df = pd.DataFrame([record_row(r, columns, country=cfg.project.country) for r in delivered], columns=[c.header for c in columns])
+    df = pd.DataFrame([["" if v is None else v for v in record_row(r, columns, country=cfg.project.country)] for r in delivered],
+                      columns=[c.header for c in columns])
     statuses = st.multiselect("Filter by status", [s.value for s in RecordStatus if s != RecordStatus.EXCLUDED],
                               default=[s.value for s in RecordStatus if s != RecordStatus.EXCLUDED])
     query = st.text_input("Search (name, e-mail, website…)")

@@ -139,3 +139,17 @@ def load_schema(ref: str | dict[str, Any] | Path | None) -> Schema:
     raise FileNotFoundError(
         f"Unknown schema {ref_str!r}. Built-in schemas: {', '.join(builtin_schema_names())}"
     )
+
+
+def apply_overrides(schema: Schema, overrides: dict[str, dict[str, Any]] | None) -> Schema:
+    """Return a copy of ``schema`` with per-field attribute changes, e.g. ``{"category": {"required": False}}``."""
+    if not overrides:
+        return schema
+    fields = []
+    for f in schema.fields:
+        changes = overrides.get(f.name)
+        fields.append(f.model_copy(update=changes) if changes else f)
+    unknown = sorted(set(overrides) - {f.name for f in schema.fields})
+    if unknown:
+        raise ValueError(f"schema_overrides refer to unknown field(s): {', '.join(unknown)}")
+    return schema.model_copy(update={"fields": fields})

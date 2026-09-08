@@ -27,6 +27,6 @@ echo; echo "=== Project 3/3: product catalogue (html_list on books.toscrape.com)
 dataharvest run projects/books_catalogue.yaml
 
 echo; echo "=== Audit of an existing spreadsheet ==="
-dataharvest validate data/input/seed_companies.csv --schema leads --country BE -m "Notes from client=description" --out data/output/seed_companies_audit.xlsx
+dataharvest validate data/input/seed_companies.csv --schema leads --country BE -m "Notes from client=description" --optional category --out data/output/seed_companies_audit.xlsx
 
 echo; echo "Done. Results are in data/output/."

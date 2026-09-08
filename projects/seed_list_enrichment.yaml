@@ -19,6 +19,8 @@ project:
     what we have is still correct, remove duplicates, and tell us which rows you could not verify.
 
 schema: leads
+schema_overrides:
+  category: {required: false}      # the client's list has no category column
 
 sources:
   - type: csv_import

@@ -27,6 +27,6 @@ Write-Host "`n=== Project 3/3: product catalogue (html_list on books.toscrape.co
 dataharvest run projects/books_catalogue.yaml
 
 Write-Host "`n=== Audit of an existing spreadsheet ===" -ForegroundColor Green
-dataharvest validate data/input/seed_companies.csv --schema leads --country BE -m "Notes from client=description" --out data/output/seed_companies_audit.xlsx
+dataharvest validate data/input/seed_companies.csv --schema leads --country BE -m "Notes from client=description" --optional category --out data/output/seed_companies_audit.xlsx
 
 Write-Host "`nDone. Open the files in data\output\ (start data\output)." -ForegroundColor Green

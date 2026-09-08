@@ -15,7 +15,7 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .schema import Schema, load_schema
+from .schema import Schema, apply_overrides, load_schema
 
 load_dotenv()  # .env in the working directory, if present
 
@@ -142,6 +142,7 @@ class HttpConfig(BaseModel):
 class ProjectConfig(BaseModel):
     project: ProjectInfo
     schema_ref: str | dict[str, Any] | None = Field(default="leads", alias="schema")
+    schema_overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)  # field name -> FieldDef attributes to change
     sources: list[SourceConfig]
     enrichment: EnrichmentConfig = EnrichmentConfig()
     verification: VerificationConfig = VerificationConfig()
@@ -174,7 +175,7 @@ class ProjectConfig(BaseModel):
                 candidate = (self._path.parent / ref).resolve()
                 if candidate.suffix in (".yaml", ".yml") and candidate.exists():
                     ref = str(candidate)
-            self._schema_obj = load_schema(ref)
+            self._schema_obj = apply_overrides(load_schema(ref), self.schema_overrides)
         return self._schema_obj
 
     @property

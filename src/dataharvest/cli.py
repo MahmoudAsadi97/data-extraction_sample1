@@ -165,6 +165,7 @@ def validate(
     output: Path | None = typer.Option(None, "--out", "-o", help="Where to write the audit workbook (.xlsx)."),
     similarity: int = typer.Option(90, "--similarity", help="Name similarity (50-100) for duplicate detection."),
     mapping: list[str] = typer.Option([], "--map", "-m", help='Column mapping "Column name=field", repeatable (e.g. -m "Tel=phone").'),
+    optional: list[str] = typer.Option([], "--optional", help="Treat a required schema field as optional for this audit (repeatable)."),
 ) -> None:
     """Audit an existing spreadsheet: missing, invalid, inconsistent and duplicate records."""
     _setup_logging(False)
@@ -178,7 +179,8 @@ def validate(
         col, field_name = item.split("=", 1)
         column_map[col.strip()] = field_name.strip()
     try:
-        result = audit_file(file, schema, country=country, mapping=column_map or None, name_similarity=similarity)
+        result = audit_file(file, schema, country=country, mapping=column_map or None, name_similarity=similarity,
+                            optional_fields=list(optional) or None)
     except ValueError as exc:
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from None

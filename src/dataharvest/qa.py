@@ -16,7 +16,7 @@ from .processing.dedupe import dedupe
 from .processing.validate import normalize_record, validate_record
 from .processing.verify import assign_record_status, compute_completeness
 from .report import RunReport
-from .schema import Schema, load_schema
+from .schema import Schema, apply_overrides, load_schema
 from .sources.csv_import import AUTO_MAPPING, read_rows
 
 
@@ -56,9 +56,12 @@ def map_columns(headers: list[str], schema: Schema, mapping: dict[str, str] | No
 
 
 def audit_file(path: str | Path, schema_ref: str | dict | None = "leads", *, country: str = "BE",
-               mapping: dict[str, str] | None = None, name_similarity: int = 90) -> AuditResult:
+               mapping: dict[str, str] | None = None, name_similarity: int = 90,
+               optional_fields: list[str] | None = None) -> AuditResult:
     path = Path(path)
     schema = load_schema(schema_ref)
+    if optional_fields:
+        schema = apply_overrides(schema, {name: {"required": False} for name in optional_fields})
     rows = read_rows(path)
     if not rows:
         raise ValueError(f"no data rows found in {path.name}")
