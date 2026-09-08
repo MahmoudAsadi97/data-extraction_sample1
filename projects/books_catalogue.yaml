@@ -1,0 +1,53 @@
+# Project: product catalogue extraction from a listing website with pagination and detail pages.
+# Uses books.toscrape.com - a public sandbox site made for scraping practice (no rate limits, no ToS issues).
+# Shows the generic `html_list` source: any listing site can be described with CSS selectors, no code.
+#
+#   dataharvest run projects/books_catalogue.yaml
+
+project:
+  name: books_catalogue
+  title: "Product catalogue - books.toscrape.com (sandbox)"
+  country: GB
+  language: en
+  instructions: |
+    Extract every product from the catalogue (title, price, currency, rating, availability, stock, UPC,
+    description, product URL) into a clean spreadsheet. Follow pagination; open each product page for the UPC.
+
+schema: products
+
+sources:
+  - type: html_list
+    name: books.toscrape.com
+    start_url: https://books.toscrape.com/catalogue/page-1.html
+    item_selector: article.product_pod
+    fields:
+      title:        {selector: "h3 a", attr: title}
+      price:        {selector: "p.price_color", regex: "([0-9]+\\.[0-9]+)"}
+      currency:     {selector: "p.price_color", regex: "([£$€])", map: {"£": GBP, "$": USD, "€": EUR}}
+      rating:       {selector: "p.star-rating", attr: class, regex: "star-rating (\\w+)", map: {One: 1, Two: 2, Three: 3, Four: 4, Five: 5}}
+      availability: {selector: "p.instock.availability"}
+      product_url:  {selector: "h3 a", attr: href, absolute: true}
+      image_url:    {selector: "div.image_container img", attr: src, absolute: true}
+    next_page_selector: "li.next a"
+    max_pages: 3                 # 20 products per page; raise to 50 for the whole catalogue (1000 products)
+    delay_seconds: 0.5
+    detail:                      # follow each product_url for extra fields
+      url_field: product_url
+      fields:
+        upc:         {selector: "table.table-striped tr:nth-of-type(1) td"}
+        stock:       {selector: "div.product_main p.availability", regex: "\\((\\d+) available\\)"}
+        category:    {selector: "ul.breadcrumb li:nth-of-type(3) a"}
+        description: {selector: "#product_description ~ p"}
+
+enrichment:
+  website: {enabled: false}
+  find_missing_websites: {enabled: false}
+  vies: {enabled: false}
+
+verification: {website_liveness: false, email_mx: false, phone_format: false}
+dedupe: {enabled: true, name_similarity: 95, merge: true}
+
+output:
+  directory: data/output
+  basename: books_catalogue
+  formats: [xlsx, csv, json]

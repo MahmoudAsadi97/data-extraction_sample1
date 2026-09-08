@@ -1,0 +1,72 @@
+# Project: verified lead list of restaurants and cafés in Kortrijk (Belgium).
+# Runs entirely on free, key-less sources. ~150 businesses, 3-6 minutes on a normal connection.
+#
+#   dataharvest run projects/kortrijk_restaurants.yaml
+#   dataharvest run projects/kortrijk_restaurants.yaml --limit 25      # quick test
+
+project:
+  name: kortrijk_restaurants
+  title: "Restaurants & cafés in Kortrijk (BE) - verified lead list"
+  description: >
+    Every restaurant and café inside the municipality of Kortrijk with address, phone,
+    e-mail, website, social profiles, VAT number and opening hours.
+  country: BE
+  language: nl
+  client: "Example client - hospitality supplier (sales prospecting)"
+  requested_by: "Sales team"
+  deadline: "5 working days"
+  instructions: |
+    1. Collect all restaurants and cafés located in Kortrijk (incl. Marke, Heule, Bellegem, Aalbeke, Bissegem, Kooigem, Rollegem).
+    2. For each business: name, category, full address, phone, e-mail, website, Facebook/Instagram/LinkedIn, VAT number, opening hours.
+    3. Verify contact details before adding them to the final database. Do not guess: flag what cannot be verified.
+    4. Deliver as Excel with a separate sheet listing records that need manual review, and a duplicates sheet.
+
+schema: leads
+
+sources:
+  - type: osm_overpass
+    name: osm
+    area: Kortrijk
+    country: BE
+    tags:
+      - amenity=restaurant
+      - amenity=cafe
+
+enrichment:
+  website:
+    enabled: true            # fetch each website: liveness check + e-mail/phone/social/VAT extraction
+    max_pages_per_site: 3    # homepage + up to 2 contact/about pages
+    workers: 6
+    timeout: 15
+    respect_robots: true
+  find_missing_websites:
+    enabled: true            # web search for businesses without a website (never trusted blindly)
+    provider: auto           # google_cse when GOOGLE_CSE_API_KEY/GOOGLE_CSE_ID are set, else duckduckgo
+    max_queries: 40
+    delay_seconds: 2.5
+  vies:
+    enabled: true            # validate VAT numbers against the EU VIES register
+
+verification:
+  website_liveness: true
+  email_mx: true             # mail-domain (MX) lookup for every e-mail address
+  phone_format: true         # libphonenumber validation for the project country
+
+dedupe:
+  enabled: true
+  name_similarity: 90
+  merge: true
+
+output:
+  directory: data/output
+  basename: kortrijk_restaurants
+  formats: [xlsx, csv, json]
+  timestamp: true
+  google_sheets:
+    enabled: false           # set to true (or run with --gsheets) once GOOGLE_SERVICE_ACCOUNT_JSON is configured
+    title: "Kortrijk restaurants - verified leads"
+    share_with: []
+
+http:
+  cache: true                # cached pages are reused for 7 days (data/cache) - use --no-cache to refresh
+  min_delay_per_host: 0.5

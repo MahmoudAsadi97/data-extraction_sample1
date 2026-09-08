@@ -1,0 +1,40 @@
+# Project: register of companies headquartered in West Flanders, from Wikidata (structured open data),
+# completed from each company's website and checked against the EU VAT register.
+#
+#   dataharvest run projects/west_flanders_companies.yaml
+#
+# Change `headquarters_in` to any Wikidata place item: Q12995 = Kortrijk, Q1113 = West Flanders,
+# Q234 = Flanders, Q31 = Belgium (large: raise limit_rows and expect a slower query).
+
+project:
+  name: west_flanders_companies
+  title: "Companies headquartered in West Flanders (BE) - company register"
+  country: BE
+  language: en
+  client: "Example client - market research"
+  instructions: |
+    Compile a database of companies headquartered in the province of West Flanders with industry,
+    founding year, size, website, LinkedIn page and VAT number. Mark companies that no longer exist.
+
+schema: companies
+
+sources:
+  - type: wikidata
+    name: wikidata
+    headquarters_in: Q1113        # West Flanders
+    instance_of: Q4830453         # business (all subclasses: enterprise, public company, brewery, ...)
+    languages: "en,nl,fr,de"
+    limit_rows: 800
+
+enrichment:
+  website: {enabled: true, max_pages_per_site: 3, workers: 8, timeout: 15}
+  find_missing_websites: {enabled: true, provider: auto, max_queries: 25, delay_seconds: 2.5}
+  vies: {enabled: true}
+
+verification: {website_liveness: true, email_mx: true, phone_format: true}
+dedupe: {enabled: true, name_similarity: 92, merge: true}
+
+output:
+  directory: data/output
+  basename: west_flanders_companies
+  formats: [xlsx, csv, json]

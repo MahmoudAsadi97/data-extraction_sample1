@@ -1,0 +1,53 @@
+# Project: B2B prospect list - IT, software, consulting and marketing offices in Kortrijk.
+# Key-less sources; a Google Maps / Apollo source can be switched on when API keys are available.
+#
+#   dataharvest run projects/kortrijk_b2b_offices.yaml
+
+project:
+  name: kortrijk_b2b_offices
+  title: "IT, software, consulting & marketing offices in Kortrijk (BE)"
+  country: BE
+  language: nl
+  client: "Example client - B2B SaaS vendor"
+  instructions: |
+    Build a prospect list of technology and professional-services offices in Kortrijk with verified
+    website, e-mail and phone, LinkedIn page and VAT number. Flag anything that cannot be verified.
+
+schema: leads
+
+sources:
+  - type: osm_overpass
+    name: osm
+    area: Kortrijk
+    country: BE
+    tags:
+      - "office=it|software|telecommunication|consulting|advertising_agency|marketing|coworking|engineering"
+
+  # Optional: Google Maps Places API (needs GOOGLE_MAPS_API_KEY in .env). Results are merged and
+  # de-duplicated with the OpenStreetMap records.
+  - type: google_places
+    name: google_maps
+    enabled: false
+    text_query: "software companies in Kortrijk, Belgium"
+    max_results: 60
+
+  # Optional: Apollo.io company search (needs APOLLO_API_KEY in .env).
+  - type: apollo
+    name: apollo
+    enabled: false
+    locations: ["Kortrijk, Belgium"]
+    keywords: ["software", "IT services", "digital agency"]
+    max_results: 100
+
+enrichment:
+  website: {enabled: true, max_pages_per_site: 3, workers: 6}
+  find_missing_websites: {enabled: true, provider: auto, max_queries: 30, delay_seconds: 2.5}
+  vies: {enabled: true}
+
+verification: {website_liveness: true, email_mx: true, phone_format: true}
+dedupe: {enabled: true, name_similarity: 90, merge: true}
+
+output:
+  directory: data/output
+  basename: kortrijk_b2b_offices
+  formats: [xlsx, csv, json]

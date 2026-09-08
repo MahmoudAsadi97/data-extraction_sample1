@@ -1,0 +1,43 @@
+# Project: enrich and verify a seed list supplied by the client (CSV/Excel) - the LinkedIn / Apollo /
+# manual-research workflow. Every row is normalised, completed from the company website, checked
+# (website live, e-mail domain, phone, VAT via VIES) and de-duplicated before delivery.
+#
+#   dataharvest run projects/seed_list_enrichment.yaml
+#
+# Replace data/input/seed_companies.csv with your own export (LinkedIn Sales Navigator, Apollo, CRM...).
+# Column names are matched automatically (Company, Website, Phone, Email, City, ...); add a `mapping`
+# for anything unusual.
+
+project:
+  name: seed_list_enrichment
+  title: "Client seed list - enrichment & verification"
+  country: BE
+  language: nl
+  client: "Example client - list received by e-mail"
+  instructions: |
+    Complete and verify the attached list: find missing websites, e-mails and phone numbers, check that
+    what we have is still correct, remove duplicates, and tell us which rows you could not verify.
+
+schema: leads
+
+sources:
+  - type: csv_import
+    name: client_list
+    path: data/input/seed_companies.csv
+    mapping:
+      "Notes from client": description
+    country: BE
+
+enrichment:
+  website: {enabled: true, max_pages_per_site: 3, workers: 6}
+  find_missing_websites: {enabled: true, provider: auto, max_queries: 20, delay_seconds: 2.5}
+  vies: {enabled: true}
+  apollo: {enabled: false, max_lookups: 50}     # set true with APOLLO_API_KEY for LinkedIn URL / size / industry
+
+verification: {website_liveness: true, email_mx: true, phone_format: true}
+dedupe: {enabled: true, name_similarity: 90, merge: true}
+
+output:
+  directory: data/output
+  basename: seed_list_enrichment
+  formats: [xlsx, csv, json]
