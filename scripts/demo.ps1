@@ -7,7 +7,7 @@ Set-Location (Join-Path $PSScriptRoot "..")
 
 if (-not (Test-Path ".venv")) {
     Write-Host "Creating virtual environment..." -ForegroundColor Cyan
-    py -3 -m venv .venv
+    if (Get-Command py -ErrorAction SilentlyContinue) { py -3 -m venv .venv } else { python -m venv .venv }
 }
 & ".\.venv\Scripts\Activate.ps1"
 python -m pip install --upgrade pip --quiet

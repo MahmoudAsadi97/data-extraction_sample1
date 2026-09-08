@@ -58,6 +58,8 @@ dataharvest run projects/kortrijk_restaurants.yaml --limit 30
 ```
 
 Or simply `scripts\demo.ps1` / `scripts/demo.sh`, which sets everything up and runs the demo projects.
+(`pip install -e .` is enough for the command line; `[dev]` adds the test tools, `[ui]` the dashboard,
+`[gsheets]` the Google Sheets export.)
 
 The run prints a progress bar per stage and a result table, then writes to `data/output/`:
 
