@@ -27,6 +27,12 @@ log = logging.getLogger(__name__)
 
 DEFAULT_UA = "DataHarvest/{version} (+https://github.com/MahmoudAsadi97/data-extraction_sample1{contact})"
 MAX_BYTES = 3_000_000  # never read more than ~3 MB of a page
+# Services whose transient errors are worth waiting for (see _build_session)
+API_HOSTS = (
+    "overpass-api.de", "overpass.kumi.systems", "overpass.private.coffee", "nominatim.openstreetmap.org",
+    "query.wikidata.org", "www.wikidata.org", "ec.europa.eu", "html.duckduckgo.com", "lite.duckduckgo.com",
+    "www.googleapis.com", "places.googleapis.com", "api.apollo.io", "dns.google", "sheets.googleapis.com",
+)
 
 
 @dataclass
@@ -107,17 +113,21 @@ class HttpClient:
                 session = requests.Session()
         else:
             session = requests.Session()
-        retry = Retry(
-            total=max_retries,
-            backoff_factor=0.8,
-            status_forcelist=(429, 500, 502, 503, 504),
+        common = dict(
             allowed_methods=frozenset({"GET", "HEAD", "POST"}),
             respect_retry_after_header=False,  # never let one site's Retry-After (minutes/hours) stall a worker
             raise_on_status=False,  # hand the final 4xx/5xx response back instead of raising RetryError
         )
-        adapter = HTTPAdapter(max_retries=retry, pool_connections=20, pool_maxsize=40)
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
+        # APIs we depend on get patient retries; arbitrary company websites get one quick retry at most,
+        # otherwise a slow or dead site costs (timeout x retries x pages) per record.
+        api_retry = Retry(total=max_retries, backoff_factor=0.8, status_forcelist=(429, 500, 502, 503, 504), **common)
+        site_retry = Retry(total=1, connect=1, read=0, backoff_factor=0.5, status_forcelist=(502, 503, 504), **common)
+        site_adapter = HTTPAdapter(max_retries=site_retry, pool_connections=20, pool_maxsize=40)
+        api_adapter = HTTPAdapter(max_retries=api_retry, pool_connections=10, pool_maxsize=20)
+        session.mount("https://", site_adapter)
+        session.mount("http://", site_adapter)
+        for host in API_HOSTS:  # longest prefix wins in requests, so these override the defaults above
+            session.mount(f"https://{host}", api_adapter)
         return session
 
     # ------------------------------------------------------------------ politeness
