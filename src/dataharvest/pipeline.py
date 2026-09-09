@@ -15,7 +15,7 @@ from .config import ProjectConfig, env
 from .enrich.search import WebSearch
 from .enrich.vies import ViesClient, ViesResult
 from .enrich.website import GENERIC_LOCALPARTS, SiteExtraction, WebsiteEnricher
-from .http import HttpClient
+from .http import HttpClient, dns_healthy
 from .models import DuplicateGroup, FieldStatus, Record, RecordStatus
 from .processing.dedupe import dedupe
 from .processing.normalize import email_domain, name_key, url_domain
@@ -72,6 +72,7 @@ class Pipeline:
         )
         self.records: list[Record] = []
         self.groups: list[DuplicateGroup] = []
+        self.dns_broken = False
 
     # ================================================================== orchestration
     def run(self, export: bool = True) -> PipelineResult:
@@ -156,7 +157,15 @@ class Pipeline:
             return
         targets = [r for r in self.records if r.get("website") and r.get(self.schema.name_field or "company_name")]
         stage = self.report.start("enrich: websites", len(targets))
+        if targets and not dns_healthy():
+            self.dns_broken = True
+            self.report.warn("DNS resolution is failing on this machine, so websites cannot be checked; they are left 'unverified' "
+                             "(on WSL/VPN see the Troubleshooting section of the README)")
         self._analyse_sites(targets, wcfg.workers, stage_name="enrich: websites")
+        dns_failed = sum(1 for r in targets if (r.checks.get("website") or {}).get("liveness") == "unchecked")
+        if dns_failed:
+            self.report.warn(f"{dns_failed} website(s) could not be checked because name resolution failed on this machine "
+                             f"(WSL/VPN?) - they are marked 'unverified', not 'dead'. Re-run once DNS works; see README Troubleshooting")
         self.report.finish(stage, len(targets))
 
     def _analyse_sites(self, targets: list[Record], workers: int, stage_name: str) -> None:
@@ -194,9 +203,10 @@ class Pipeline:
         via_search = website_source.startswith("search")
         if not site.ok:
             detail = site.error or f"HTTP {site.status}"
-            if site.liveness == "blocked":
-                rec.mark("website", FieldStatus.UNVERIFIED, f"could not be checked automatically ({detail})")
-                rec.flag(f"note: website could not be checked automatically ({detail}) - open it manually")
+            if site.liveness == "blocked" or site.liveness == "unchecked" or (site.dns_failure and self.dns_broken):
+                reason = "name resolution failed on this machine" if site.dns_failure else detail
+                rec.mark("website", FieldStatus.UNVERIFIED, f"could not be checked automatically ({reason})")
+                rec.flag(f"note: website could not be checked automatically ({reason}) - open it manually")
                 return
             rec.mark("website", FieldStatus.INVALID, f"{site.liveness}: {detail}")
             rec.flag(f"website unreachable ({detail})")

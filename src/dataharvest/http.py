@@ -41,6 +41,8 @@ class FetchResult:
     from_cache: bool = False
     elapsed: float = 0.0
     blocked: bool = False  # access refused (robots.txt, bot challenge, rate limit) - not proof the site is dead
+    dns_failure: bool = False  # the host name could not be resolved
+    dns_temporary: bool = False  # ... because the local resolver failed (WSL/VPN), not because the domain is gone
 
     @property
     def is_html(self) -> bool:
@@ -220,6 +222,12 @@ class HttpClient:
         except requests.exceptions.SSLError as exc:
             return FetchResult(url=url, ok=False, error=f"ssl error: {_short(exc)}", elapsed=time.monotonic() - started)
         except requests.exceptions.ConnectionError as exc:
+            message = str(exc)
+            lowered = message.lower()
+            if any(marker in lowered for marker in ("nameresolutionerror", "failed to resolve", "getaddrinfo", "name resolution", "nodename nor servname")):
+                temporary = "Temporary failure" in message or "try again" in message.lower()
+                return FetchResult(url=url, ok=False, error="dns: temporary failure in name resolution" if temporary else "dns: host name does not resolve",
+                                   dns_failure=True, dns_temporary=temporary, elapsed=time.monotonic() - started)
             return FetchResult(url=url, ok=False, error=f"connection error: {_short(exc)}", elapsed=time.monotonic() - started)
         except requests.exceptions.Timeout:
             return FetchResult(url=url, ok=False, error="timeout", elapsed=time.monotonic() - started)
@@ -253,6 +261,24 @@ def _looks_like_challenge(resp: requests.Response, text: str) -> bool:
         return True
     server = (resp.headers.get("Server") or "").lower()
     return bool(_CHALLENGE_RE.search(text[:5000])) or "cloudflare" in server or "cf-ray" in {k.lower() for k in resp.headers}
+
+
+def dns_healthy(hosts: tuple[str, ...] = ("overpass-api.de", "www.openstreetmap.org", "duckduckgo.com"), timeout: float = 5.0) -> bool:
+    """True when at least one well-known host resolves - used to tell 'dead website' from 'broken local DNS'."""
+    import socket
+
+    old_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(timeout)
+    try:
+        for host in hosts:
+            try:
+                socket.getaddrinfo(host, 443)
+                return True
+            except OSError:
+                continue
+        return False
+    finally:
+        socket.setdefaulttimeout(old_timeout)
 
 
 def cacheable(response: requests.Response) -> bool:

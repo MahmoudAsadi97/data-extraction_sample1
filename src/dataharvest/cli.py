@@ -47,7 +47,7 @@ def _setup_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.WARNING
     logging.basicConfig(level=level, format="%(message)s", datefmt="[%X]",
                         handlers=[RichHandler(console=err_console, show_path=False, rich_tracebacks=verbose)], force=True)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.DEBUG if verbose else logging.ERROR)  # retries are reported in the results
     logging.getLogger("requests_cache").setLevel(logging.WARNING)
 
 

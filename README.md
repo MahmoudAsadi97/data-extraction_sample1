@@ -237,6 +237,36 @@ tests/                    pytest suite + recorded fixtures
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - modules and data flow
 - [`docs/GOOGLE_SHEETS_SETUP.md`](docs/GOOGLE_SHEETS_SETUP.md) - service-account setup for the Sheets export
 
+## Troubleshooting
+
+**"Temporary failure in name resolution" / every website flagged as unreachable (WSL, VPN).**
+Extraction works but the website checks fail while `nslookup hollywok.be` also fails in the same shell:
+the machine's DNS resolver is broken, not the websites. The tool detects this, leaves those websites
+`unverified` with a note instead of marking them dead, and prints a warning. WSL2's DNS forwarder is the
+usual culprit (it drops parallel lookups); point WSL at a public resolver once:
+
+```bash
+sudo tee /etc/wsl.conf >/dev/null <<'EOF'
+[network]
+generateResolvConf = false
+EOF
+sudo rm -f /etc/resolv.conf
+printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' | sudo tee /etc/resolv.conf >/dev/null
+```
+
+then run `wsl --shutdown` from PowerShell, reopen the shell and re-run. Alternatives: run the project from
+Windows PowerShell instead of WSL, or lower `enrichment.website.workers` to 2 in the project file.
+Failed checks are never cached, so a re-run simply repeats them.
+
+**Rate-limited web search.** DuckDuckGo answers 202/403 after a burst of queries; the run continues and the
+report says how many searches ran. Add `GOOGLE_CSE_API_KEY` / `GOOGLE_CSE_ID` to `.env` for a stable quota.
+
+**The Excel file is open.** The workbook is written under a timestamped name and a warning is shown;
+CSV/JSON are always written first.
+
+**Slow HTTP cache on `/mnt/c` (WSL).** Set `http: {cache: false}` in the project file or run from the
+Linux file system.
+
 ## Limitations
 
 - Web search without a Google key uses DuckDuckGo's HTML endpoint, which rate-limits aggressively; the

@@ -152,3 +152,53 @@ def test_project_deadline_as_yaml_date(tmp_path):
     path = tmp_path / "p.yaml"
     path.write_text(text, encoding="utf-8")
     assert load_project(path).project.deadline == "2026-10-01"
+
+
+class TestDnsFailures:
+    @responses.activate
+    def test_temporary_resolver_failure_is_unchecked_not_dead(self, http, leads_project):
+        from urllib3.exceptions import NameResolutionError
+
+        err = requests.exceptions.ConnectionError(NameResolutionError("flaky.example.org", None, "[Errno -3] Temporary failure in name resolution"))
+        responses.add(responses.GET, "https://flaky.example.org/", body=err)
+        site = WebsiteEnricher(http, respect_robots=False).analyse("https://flaky.example.org/", "Flaky")
+        assert site.dns_failure and site.dns_temporary and site.liveness == "unchecked"
+        assert len(responses.calls) == 1  # no pointless http:// retry when the name itself does not resolve
+        rec = Record(record_id="X", source="osm")
+        rec.set("company_name", "Flaky", "osm")
+        rec.set("website", "https://flaky.example.org/", "osm")
+        Pipeline(leads_project, http=http)._apply_site_extraction(rec, site)
+        assert rec.field_status("website") == FieldStatus.UNVERIFIED and any("name resolution failed" in f for f in rec.flags)
+        assert not any("unreachable" in f for f in rec.flags)
+
+    @responses.activate
+    def test_unknown_host_is_unreachable_when_dns_works(self, http, leads_project):
+        from urllib3.exceptions import NameResolutionError
+
+        err = requests.exceptions.ConnectionError(NameResolutionError("gone.example.org", None, "[Errno -2] Name or service not known"))
+        responses.add(responses.GET, "https://gone.example.org/", body=err)
+        site = WebsiteEnricher(http, respect_robots=False).analyse("https://gone.example.org/", "Gone")
+        assert site.dns_failure and not site.dns_temporary and site.liveness == "unreachable"
+        rec = Record(record_id="X", source="osm")
+        rec.set("company_name", "Gone", "osm")
+        rec.set("website", "https://gone.example.org/", "osm")
+        pipeline = Pipeline(leads_project, http=http)
+        pipeline.dns_broken = False
+        pipeline._apply_site_extraction(rec, site)
+        assert rec.field_status("website") == FieldStatus.INVALID and any("unreachable" in f for f in rec.flags)
+        pipeline.dns_broken = True  # ... but when the machine's DNS is known to be broken, nothing is declared dead
+        rec2 = Record(record_id="Y", source="osm")
+        rec2.set("company_name", "Gone", "osm")
+        rec2.set("website", "https://gone.example.org/", "osm")
+        pipeline._apply_site_extraction(rec2, site)
+        assert rec2.field_status("website") == FieldStatus.UNVERIFIED
+
+    def test_dns_health_check(self, monkeypatch):
+        import socket
+
+        from dataharvest.http import dns_healthy
+
+        monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: (_ for _ in ()).throw(socket.gaierror("boom")))
+        assert dns_healthy() is False
+        monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [("ok",)])
+        assert dns_healthy() is True
