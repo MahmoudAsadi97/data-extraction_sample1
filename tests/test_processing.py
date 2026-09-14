@@ -106,11 +106,11 @@ class TestDedupe:
         c = make("C", company_name="Bistro Tout Court", website="https://www.bistrotoutcourt.be/", postcode="8501", street="Sint-Katharinastraat")
         d = make("D", company_name="Bistro Tout Court", website="https://www.bistrotoutcourt.be/", postcode="8500", street="Budastraat")
         m2 = compare(c, d, "company_name", 90)
-        assert m2 is not None and m2.confident  # same domain + identical names -> duplicate
+        assert m2 is not None and not m2.confident  # different addresses remain separate
         e = make("E", company_name="Pizza Hut Kortrijk", website="https://restaurants.pizzahut.be/a", postcode="8500")
         f = make("F", company_name="Pizza Hut Kinepolis", website="https://restaurants.pizzahut.be/b", postcode="8500")
         m3 = compare(e, f, "company_name", 90)
-        assert m3 is not None and m3.confident is True  # same domain and same postcode
+        assert m3 is not None and not m3.confident  # shared chain domain is insufficient
         g = make("G", company_name="Bocca", website="https://www.bocca.be/x", postcode="8500")
         h = make("H", company_name="Kaffee Bar Zuid", website="https://www.bocca.be/y", postcode="9000")
         m4 = compare(g, h, "company_name", 90)

@@ -57,6 +57,8 @@ class MailDomainChecker:
             try:
                 answers = resolver.resolve(domain, "MX")
                 hosts = sorted(str(r.exchange).rstrip(".") for r in answers)
+                if hosts == [""]:
+                    return MxResult(domain, False, "domain explicitly refuses mail (Null MX)")
                 if hosts and hosts != [""]:
                     return MxResult(domain, True, f"MX: {hosts[0]}")
             except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
@@ -87,10 +89,17 @@ class MailDomainChecker:
             status = data.get("Status")
             if status == 3:
                 return MxResult(domain, False, "domain does not exist (NXDOMAIN via DoH)")
-            if data.get("Answer"):
+            if status != 0:
+                return MxResult(domain, None, f"DNS lookup unavailable (DoH status {status})")
+            mx = [a for a in data.get("Answer", []) if a.get("type") == 15]
+            if any(str(a.get("data", "")).strip() == "0 ." for a in mx):
+                return MxResult(domain, False, "domain explicitly refuses mail (Null MX via DoH)")
+            if mx:
                 return MxResult(domain, True, "MX found (DoH)")
             data_a = self.http.get_json(DOH_URL, params={"name": domain, "type": "A"}, timeout=8, min_delay=0.1)
-            if data_a.get("Answer"):
+            if data_a.get("Status") not in (0, 3):
+                return MxResult(domain, None, "DNS address lookup unavailable (DoH)")
+            if any(a.get("type") in (1, 28) for a in data_a.get("Answer", [])):
                 return MxResult(domain, True, "no MX record, but domain resolves (DoH)")
             return MxResult(domain, False, "no MX and no A record (DoH)")
         except Exception as exc:
@@ -118,7 +127,7 @@ def verify_email_field(record: Record, checker: MailDomainChecker | None) -> Non
         record.flag(f"e-mail domain cannot receive mail ({mx.detail})")
     elif mx.deliverable is True and fv.status == FieldStatus.UNVERIFIED:
         record.mark("email", FieldStatus.UNVERIFIED, "domain accepts mail; address itself not confirmed by a second source")
-    elif mx.deliverable is None and fv.status != FieldStatus.VERIFIED:
+    elif mx.deliverable is None and fv.status == FieldStatus.UNVERIFIED:
         record.mark("email", FieldStatus.UNVERIFIED, "mail-domain check unavailable")
 
 

@@ -1,20 +1,19 @@
 # Requirements traceability
 
-How each requirement of the brief maps to the implementation and to the tests that prove it.
+| Requirement | Implementation | Verification |
+|---|---|---|
+| Offline import with bounded resources | `sources/csv_import.py`, `qa.py` | Import edge cases in `test_product_safety.py`; fixture source tests |
+| Retain all audit records | `qa.py`, `Workspace.save_audit` | Snapshot roundtrip and sample row count in `test_workspace.py` |
+| Preserve separate locations | `processing/dedupe.py` | Branch rules, transitive conflict and large-block regression tests |
+| Do not trust unrelated website contacts | `Pipeline._apply_site_extraction` | Wrong-company and domain-suffix tests |
+| Correct DNS uncertainty | `processing/verify.py` | DoH failures, Null MX and preserved conflicts |
+| Persist decisions without altering evidence | `Workspace.review` | Roundtrip, history and concurrent-update tests |
+| Block defective approvals | `approval_blockers` | Invalid field and required-column tests |
+| Compare revisions using stable IDs | `Workspace.compare` | Known changed/added/removed sample, missing/duplicate keys and project boundaries |
+| Approved-only delivery | `Workspace.approved_csv` | Approve/reject roundtrip, CSV row accounting |
+| Spreadsheet-safe text | `export/safety.py` | Formula payload parametrization; Excel literal-cell regression |
+| Browser workflow | `dashboard.py` | Streamlit AppTest demo, review, comparison and extraction-navigation tests |
+| Installed product works outside checkout | Package resources and CLI launcher | Wheel smoke job in CI |
+| Only necessary repository files | `.gitignore`, `scripts/check_repository.py` | Tracked/staged-file release check |
 
-| # | Requirement (brief) | Implementation | Tests |
-|---|---|---|---|
-| R1 | Extract accurate data from specified websites and online sources | `sources/osm_overpass.py`, `sources/wikidata.py`, `sources/html_list.py` (any site via selectors, pagination, detail pages), `sources/google_places.py`, `sources/apollo.py`, `sources/csv_import.py` | `tests/test_sources.py` (recorded API responses) |
-| R2 | Research and collect the required information based on instructions | Project YAML = the instructions (`config.py`); `project.instructions` kept in the Run Log; `dataharvest init` templates; `docs/PROJECT_BRIEF.md`, `docs/SOP.md` | `test_export_qa_cli.py::TestCli::test_init_creates_valid_project`, `test_shipped_projects_are_valid` |
-| R3 | Enter and organise the data in Excel or Google Sheets | `export/excel.py` (6-sheet workbook, formatting, formulas, validation, hyperlinks), `export/flat.py` (CSV for Sheets import), `export/gsheets.py` (`--gsheets`) | `TestExcel::test_workbook_structure`, `TestColumnsAndFlatExports`, `test_pipeline.py::test_full_run` |
-| R4 | Verify information before adding it to the final database | `enrich/website.py` (liveness, name match, contact confirmation), `enrich/vies.py` (VAT register), `processing/verify.py` (MX, phone), status model in `models.py` | `tests/test_enrich.py`, `tests/test_processing.py::TestVerification`, `test_full_run` |
-| R5 | Check for missing, duplicate or incorrect records | `processing/validate.py` (required fields, formats, ranges, cross-field rules), `processing/dedupe.py` (blocking + fuzzy matching, merge/flag), `qa.py` + `dataharvest validate` for existing files | `TestValidation`, `TestDedupe`, `TestAudit`, `test_validate_command` |
-| R6 | Maintain consistent formatting and data structure | `processing/normalize.py` (one canonical format per type), schemas in `schemas/*.yaml`, shared column layout in `export/columns.py` | `tests/test_normalize.py` (36 cases), `test_columns_and_row` |
-| R7 | Clearly flag information that cannot be verified instead of guessing | Field statuses `unverified` / `conflict` / `invalid`, record status NEEDS_REVIEW, `Review flags` column, *Needs Review* sheet, candidates listed as "other values seen"; search results never trusted without a name match | `test_full_run` (Thai Lin conflict, Basta! unreachable, Alvaro search confirmation), `TestVerification::test_record_status_rules` |
-| R8 | Follow project instructions and meet agreed deadlines | Repeatable runs from one file, HTTP cache for fast re-runs, `--limit` test runs, run report with timings, `docs/SOP.md` time budget, deadline recorded in the project | `test_run_command_offline`, report assertions in `test_full_run` |
-| R9 | Attention to detail and accuracy | Provenance per value (source, page, note), raw payload kept in JSON, deterministic record ids, checksum validation of VAT numbers, phone validation per country | `test_vat_checksum`, `test_csv_and_json`, `test_full_run` |
-| R10 | Good knowledge of Excel and Google Sheets | Live `COUNTIF`/`COUNTA` formulas in the Summary, conditional formatting, data-validation drop-downs, freeze panes, auto-filter, number formats, data bars, UTF-8 BOM CSV for Sheets, gspread push with header formatting | `TestExcel`, manual inspection (`docs/screenshots/`) |
-| R11 | Research across multiple websites | Multi-source projects merged and de-duplicated (`kortrijk_b2b_offices.yaml`), website crawl of home + contact pages, web-search discovery, VIES cross-check | `test_full_run`, `TestWebsiteEnricher::test_full_analysis` |
-| R12 | Handle repetitive and large-volume tasks | Thread pool for website checks, per-host rate limiting, caching, blocking in duplicate detection (no O(n²) over the full set), progress bars, Streamlit dashboard | `TestDedupe::test_find_matches_blocking_scales`, `tests/test_app.py` |
-| R13 | Reliable communication / work independently | Run report (Markdown + JSON) with warnings and stage log; Run Log sheet; delivery gates in `docs/QA_CHECKLIST.md` | `RunReport` assertions in `test_full_run` |
-| Tools | Google Search, LinkedIn, Apollo, Google Maps, Excel, Google Sheets | see `docs/SOURCES_AND_ALTERNATIVES.md` - each tool either integrated (key) or replaced by a free equivalent | `TestGooglePlacesAndApollo`, `TestSearch`, `test_google_sheets_unavailable_without_credentials` |
+See `VALIDATION.md` for the actual release outcome and remaining verification limits.

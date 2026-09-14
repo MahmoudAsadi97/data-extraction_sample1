@@ -11,6 +11,7 @@ from ..models import DuplicateGroup, Record, RecordStatus
 from ..report import RunReport
 from ..schema import Schema
 from .columns import build_columns, record_row
+from .safety import csv_cell
 
 
 def export_csv(path: Path, records: list[Record], schema: Schema, *, delivered_only: bool = True) -> Path:
@@ -19,9 +20,9 @@ def export_csv(path: Path, records: list[Record], schema: Schema, *, delivered_o
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as fh:  # BOM so Excel detects UTF-8
         writer = csv.writer(fh, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow([c.header for c in columns])
+        writer.writerow([csv_cell(c.header) for c in columns])
         for rec in rows:
-            writer.writerow(["" if v is None else (v.replace("\n", " | ") if isinstance(v, str) else v) for v in record_row(rec, columns)])
+            writer.writerow([csv_cell(v) for v in record_row(rec, columns)])
     return path
 
 

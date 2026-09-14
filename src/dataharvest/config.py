@@ -8,6 +8,7 @@ the result. See ``projects/*.yaml`` for complete, runnable examples.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -40,8 +41,10 @@ class ProjectInfo(BaseModel):
     @classmethod
     def _slug(cls, v: str) -> str:
         v = v.strip()
-        if not v or any(c in v for c in ' /\\:*?"<>|'):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", v):
             raise ValueError("project.name must be a simple slug (used in file names)")
+        if v.upper() in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}:
+            raise ValueError("Reserved Windows file name is not a valid project name")
         return v
 
     @field_validator("country")
@@ -58,7 +61,7 @@ class SourceConfig(BaseModel):
     type: str
     name: str | None = None  # label used in the output; defaults to type
     enabled: bool = True
-    limit: int | None = None
+    limit: int | None = Field(default=None, ge=1)
 
     @property
     def label(self) -> str:
@@ -76,7 +79,7 @@ class WebsiteEnrichment(BaseModel):
     enabled: bool = True
     max_pages_per_site: int = Field(default=3, ge=1, le=10)
     workers: int = Field(default=6, ge=1, le=32)
-    timeout: float = 15.0
+    timeout: float = Field(default=15.0, gt=0, le=120)
     respect_robots: bool = True
 
 
@@ -84,17 +87,17 @@ class SearchEnrichment(BaseModel):
     enabled: bool = True
     provider: Literal["auto", "duckduckgo", "google_cse", "off"] = "auto"
     max_queries: int = Field(default=40, ge=0)
-    delay_seconds: float = 2.0
+    delay_seconds: float = Field(default=2.0, ge=0)
 
 
 class ViesEnrichment(BaseModel):
     enabled: bool = True
-    delay_seconds: float = 1.0
+    delay_seconds: float = Field(default=1.0, ge=0)
 
 
 class ApolloEnrichment(BaseModel):
     enabled: bool = False  # needs APOLLO_API_KEY
-    max_lookups: int = 50
+    max_lookups: int = Field(default=50, ge=0)
 
 
 class EnrichmentConfig(BaseModel):
@@ -132,16 +135,21 @@ class OutputConfig(BaseModel):
     id_prefix: str = ""  # record id prefix, e.g. KOR -> KOR-0001 (default: derived from the project name)
     google_sheets: GoogleSheetsConfig = GoogleSheetsConfig()
 
+    @field_validator("basename")
+    @classmethod
+    def _basename(cls, value: str) -> str:
+        return ProjectInfo._slug(value) if value else value
+
 
 class HttpConfig(BaseModel):
     user_agent: str = ""
     contact_email: str = ""
-    timeout: float = 20.0
+    timeout: float = Field(default=20.0, gt=0, le=120)
     cache: bool = True
     cache_dir: str = "data/cache"
-    cache_expire_hours: int = 24 * 7
-    min_delay_per_host: float = 0.5
-    max_retries: int = 3
+    cache_expire_hours: int = Field(default=24 * 7, ge=0)
+    min_delay_per_host: float = Field(default=0.5, ge=0)
+    max_retries: int = Field(default=3, ge=0, le=10)
 
 
 class ProjectConfig(BaseModel):
@@ -154,7 +162,7 @@ class ProjectConfig(BaseModel):
     dedupe: DedupeConfig = DedupeConfig()
     output: OutputConfig = OutputConfig()
     http: HttpConfig = HttpConfig()
-    max_records: int = 0  # 0 = unlimited
+    max_records: int = Field(default=0, ge=0)  # 0 = unlimited
 
     model_config = {"populate_by_name": True}
 

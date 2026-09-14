@@ -4,13 +4,13 @@ install:
 	pip install -e ".[dev,ui]"
 
 test:
-	pytest -q
+	pytest -q -m "not network"
 
 lint:
 	ruff check src tests app
 
 demo:
-	dataharvest run projects/kortrijk_restaurants.yaml --limit 30
+	dataharvest workspace demo
 
 ui:
 	dataharvest ui

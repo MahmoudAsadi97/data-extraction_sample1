@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dataharvest"
-version = "1.0.0"
+version = "1.1.0"
 description = "Web data extraction, verification and Excel/Google Sheets delivery toolkit for lead lists and structured databases."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,6 +30,7 @@ dependencies = [
     "phonenumbers>=8.13",
     "rapidfuzz>=3.5",
     "openpyxl>=3.1",
+    "defusedxml>=0.7,<1",
     "dnspython>=2.4",
     "typer>=0.12",
     "rich>=13.0",
@@ -38,9 +39,9 @@ dependencies = [
 
 [project.optional-dependencies]
 gsheets = ["gspread>=6.0", "google-auth>=2.23"]
-ui = ["streamlit>=1.30", "pandas>=2.0"]
+ui = ["streamlit>=1.50,<2", "pandas>=2.1,<4"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "responses>=0.24", "ruff>=0.4"]
-all = ["gspread>=6.0", "google-auth>=2.23", "streamlit>=1.30", "pandas>=2.0"]
+all = ["gspread>=6.0", "google-auth>=2.23", "streamlit>=1.50,<2", "pandas>=2.1,<4"]
 
 [project.scripts]
 dataharvest = "dataharvest.cli:app"
@@ -52,7 +53,7 @@ Repository = "https://github.com/MahmoudAsadi97/data-extraction_sample1"
 where = ["src"]
 
 [tool.setuptools.package-data]
-dataharvest = ["schemas/*.yaml"]
+dataharvest = ["schemas/*.yaml", "examples/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -71,6 +72,7 @@ select = ["E", "F", "W", "I", "B", "UP"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
+"src/dataharvest/workspace_cli.py" = ["B008"]
 "src/dataharvest/cli.py" = ["B008"]  # typer's declarative Option()/Argument() defaults
 
 [tool.coverage.run]

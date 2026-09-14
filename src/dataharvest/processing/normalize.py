@@ -7,6 +7,7 @@ Everything here is pure (no network) and unit-tested.
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from datetime import date, datetime
@@ -338,14 +339,14 @@ def normalize_social(value: Any, network: str) -> str | None:
 
 # --------------------------------------------------------------------------- numbers, dates, coordinates
 
-_NUM_RE = re.compile(r"-?\d+(?:[.,]\d+)?")
+_NUM_RE = re.compile(r"[-+]?\d+(?:[.,]\d+)?(?:[eE][-+]?\d+)?")
 
 
 def normalize_number(value: Any) -> float | None:
-    if value is None:
+    if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        return float(value) if math.isfinite(value) else None
     text = str(value).replace("\u00a0", " ").strip()
     text = re.sub(r"(?<=\d) (?=\d{3}\b)", "", text)  # "3 600" -> "3600"
     if "," in text and "." in text:  # both separators present: the last one is the decimal separator
@@ -363,14 +364,15 @@ def normalize_number(value: Any) -> float | None:
     if not m:
         return None
     try:
-        return float(m.group(0))
+        result = float(m.group(0))
+        return result if math.isfinite(result) else None
     except ValueError:
         return None
 
 
 def normalize_integer(value: Any) -> int | None:
     num = normalize_number(value)
-    return int(round(num)) if num is not None else None
+    return int(num) if num is not None and num.is_integer() else None
 
 
 def normalize_year(value: Any) -> int | None:

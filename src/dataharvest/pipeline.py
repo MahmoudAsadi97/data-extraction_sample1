@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from rapidfuzz import fuzz
@@ -41,7 +41,7 @@ class PipelineResult:
     records: list[Record]
     groups: list[DuplicateGroup]
     report: RunReport
-    outputs: dict[str, Path] = field(default_factory=dict)
+    outputs: dict[str, Path | str] = field(default_factory=dict)
 
     @property
     def delivered(self) -> list[Record]:
@@ -73,6 +73,7 @@ class Pipeline:
         self.records: list[Record] = []
         self.groups: list[DuplicateGroup] = []
         self.dns_broken = False
+        self._output_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S_%f")
 
     # ================================================================== orchestration
     def run(self, export: bool = True) -> PipelineResult:
@@ -235,8 +236,13 @@ class Pipeline:
             if via_search or site.name_similarity < 60 or site.liveness == "redirected":
                 rec.flag("website could not be linked to the company name - review")
 
+        if not site.name_match:
+            rec.flag("website identity not confirmed; extracted contacts were not applied - review")
+            return
+
         # ---- e-mail
-        own_emails = [e for e in site.emails if site_domain and (email_domain(e) or "").endswith(site_domain)]
+        own_emails = [e for e in site.emails if site_domain and
+                      (email_domain(e) == site_domain or (email_domain(e) or "").endswith("." + site_domain))]
         current_email = rec.get("email")
         if current_email:
             if str(current_email).lower() in site.emails:
@@ -463,28 +469,33 @@ class Pipeline:
         self.report.finish(stage, len([r for r in self.records if r.status != RecordStatus.EXCLUDED]))
 
     # ------------------------------------------------------------------ export
-    def export(self) -> dict[str, Path]:
-        from .export import export_all
+    def export(self) -> dict[str, Path | str]:
+        from .export import export_all, export_json
 
         stage = self.report.start("export")
         outputs = export_all(self)
         self.report.outputs = {k: _display_path(v) for k, v in outputs.items()}
         self.report.finish(stage, len(outputs), ", ".join(outputs))
         directory, basename = self.output_paths()
-        md, js = self.report.write(directory, basename)
+        md, js = directory / f"{basename}_report.md", directory / f"{basename}_report.json"
         outputs["report_md"], outputs["report_json"] = md, js
         self.report.outputs.update({"report_md": _display_path(md), "report_json": _display_path(js)})
+        self.report.write(directory, basename)
+        if "json" in outputs:
+            export_json(Path(outputs["json"]), self.records, self.groups, self.report, self.schema)
         return outputs
 
     def output_paths(self) -> tuple[Path, str]:
         directory = self.config.resolve_path(self.config.output.directory)
-        stamp = datetime.now().strftime("%Y-%m-%d") if self.config.output.timestamp else ""
+        stamp = self._output_stamp if self.config.output.timestamp else ""
         basename = self.config.output.basename + (f"_{stamp}" if stamp else "")
         return directory, basename
 
 
-def _display_path(path: Path) -> str:
+def _display_path(path: Path | str) -> str:
     """Paths in reports are shown relative to the working directory when possible."""
+    if str(path).startswith(("http://", "https://")):
+        return str(path)
     try:
         return str(Path(path).resolve().relative_to(Path.cwd().resolve()))
     except ValueError:

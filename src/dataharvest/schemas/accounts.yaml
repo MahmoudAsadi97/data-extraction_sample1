@@ -1,0 +1,17 @@
+name: accounts
+label: Accounts
+entity: company location
+fields:
+  - {name: account_id, label: Account ID, type: string, required: true, description: Stable customer-owned identifier retained across imports.}
+  - {name: company_name, label: Company name, type: string, required: true}
+  - {name: website, label: Website, type: url}
+  - {name: email, label: Email, type: email}
+  - {name: phone, label: Phone, type: phone}
+  - {name: vat_number, label: VAT number, type: vat}
+  - {name: street, label: Street, type: string}
+  - {name: house_number, label: House number, type: string}
+  - {name: postcode, label: Postcode, type: postcode}
+  - {name: city, label: City, type: string}
+  - {name: country, label: Country, type: string}
+  - {name: category, label: Category, type: string}
+address_fields: [street, house_number, postcode, city, country]

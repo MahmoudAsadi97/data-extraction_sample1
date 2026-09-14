@@ -74,6 +74,12 @@ def _address_key(rec: Record) -> str:
     return f"{postcode}|{street}|{number}".strip("|")
 
 
+def _identity_conflicts(a: Record, b: Record) -> bool:
+    """Different locations or legal identifiers must survive as separate records."""
+    return any(a.get(key) and b.get(key) and name_key(str(a.get(key))) != name_key(str(b.get(key)))
+               for key in ("country", "postcode", "street", "house_number", "vat_number", "upc"))
+
+
 def compare(a: Record, b: Record, name_field: str, threshold: int) -> Match | None:
     name_a, name_b = name_key(str(a.get(name_field) or "")), name_key(str(b.get(name_field) or ""))
     sim = fuzz.token_set_ratio(name_a, name_b) if name_a and name_b else 0
@@ -84,13 +90,15 @@ def compare(a: Record, b: Record, name_field: str, threshold: int) -> Match | No
     same_postcode = bool(a.get("postcode")) and a.get("postcode") == b.get("postcode")
 
     hard_ids = [k for k in shared if k in ("phone", "email", "vat_number", "upc", "product_url")]
+    if _identity_conflicts(a, b) and (shared or sim >= threshold):
+        return Match(a.record_id, b.record_id, sim, "conflicting location or legal identifier (branch or chain?) - review", False)
     if hard_ids and sim >= 60:
         return Match(a.record_id, b.record_id, sim, f"same {', '.join(hard_ids)}; names {sim:.0f}% similar", True)
-    if "website" in shared and (sim >= 60 or same_postcode):
-        return Match(a.record_id, b.record_id, sim, f"same website domain; names {sim:.0f}% similar", True)
+    if "website" in shared and sim >= threshold and same_address:
+        return Match(a.record_id, b.record_id, sim, f"same website domain and address; names {sim:.0f}% similar", True)
     if sim >= threshold and (same_address or same_postcode or (not a.get("postcode") and not b.get("postcode"))):
         where = "same address" if same_address else ("same postcode" if same_postcode else "no address on either record")
-        return Match(a.record_id, b.record_id, sim, f"names {sim:.0f}% similar; {where}", same_address or sim >= 97)
+        return Match(a.record_id, b.record_id, sim, f"names {sim:.0f}% similar; {where}", same_address)
     if "website" in shared:
         return Match(a.record_id, b.record_id, sim, f"same website domain but different name/address (branch or chain?) - names {sim:.0f}% similar", False)
     if hard_ids:
@@ -110,18 +118,18 @@ def find_matches(records: list[Record], schema: Schema, threshold: int = 90) -> 
         key = name_key(str(rec.get(name_field) or ""))
         if key:
             blocks[f"name:{key[:6]}"].append(rec)
-        if not rec.get("postcode") and key:
-            blocks["nopc"].append(rec)
     seen_pairs: set[tuple[str, str]] = set()
     matches: list[Match] = []
     for members in blocks.values():
-        if len(members) < 2 or len(members) > 400:
+        if len(members) < 2:
             continue
         for a, b in itertools.combinations(members, 2):
             pair = tuple(sorted((a.record_id, b.record_id)))
             if pair in seen_pairs:
                 continue
             seen_pairs.add(pair)
+            if len(seen_pairs) > 250_000:
+                raise ValueError("Duplicate comparison budget exceeded (250,000 pairs). Split the input into smaller, disjoint batches.")
             m = compare(a, b, name_field, threshold)
             if m:
                 matches.append(m)
@@ -175,6 +183,13 @@ def dedupe(records: list[Record], schema: Schema, *, threshold: int = 90, merge:
     possible: list[Match] = []
     for m in matches:
         if m.confident:
+            left = [rid for rid in uf.parent if uf.find(rid) == uf.find(m.a)] if m.a in uf.parent else [m.a]
+            right = [rid for rid in uf.parent if uf.find(rid) == uf.find(m.b)] if m.b in uf.parent else [m.b]
+            if any(_identity_conflicts(by_id[a], by_id[b]) for a in left for b in right):
+                m.confident = False
+                m.reason = "transitive duplicate group contains conflicting locations or legal identifiers - review"
+                possible.append(m)
+                continue
             uf.union(m.a, m.b)
             confident_pairs[tuple(sorted((m.a, m.b)))] = m
         else:

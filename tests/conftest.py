@@ -60,3 +60,10 @@ def leads_project(tmp_path: Path) -> ProjectConfig:
 @pytest.fixture
 def repo_root() -> Path:
     return ROOT
+
+
+@pytest.fixture(autouse=True)
+def fixture_dns(request, monkeypatch):
+    """Recorded HTTP tests use deterministic public DNS; network tests use real DNS."""
+    if request.node.get_closest_marker("network") is None:
+        monkeypatch.setattr("dataharvest.network._resolve", lambda host, port: ["93.184.216.34"])

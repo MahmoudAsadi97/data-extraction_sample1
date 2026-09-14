@@ -1,63 +1,68 @@
 # Architecture
 
-```mermaid
-flowchart LR
-    P[projects/*.yaml<br/>brief as config] --> PL[pipeline.py]
-    subgraph Sources
-        S1[osm_overpass] & S2[wikidata] & S3[html_list] & S4[csv_import] & S5[google_places] & S6[apollo]
-    end
-    Sources --> PL
-    PL --> N[normalize]
-    N --> E[enrich: websites · web search · Apollo · VIES]
-    E --> V[verify: MX · phone · statuses]
-    V --> VA[validate: schema rules]
-    VA --> D[dedupe: merge / flag]
-    D --> X[export: Excel · CSV · JSON · Google Sheets]
-    D --> R[report.md / .json]
-```
+## Two supported workflows
 
-## Modules
+The default dashboard and `workspace` CLI use the offline company-audit workflow:
+
+`bounded input → column mapping → normalization → validation → duplicate candidates → SQLite snapshot → operator decisions → approved CSV`
+
+The extraction workflow remains available under **Extraction projects** and `dataharvest run`:
+
+`configured sources → normalization → website/API enrichment → verification → validation → deduplication → research exports`
+
+Workspace approval controls do not automatically apply to extraction exports. The two workflows share
+schemas, field status models, normalization, validation and duplicate detection. This avoids duplicating
+business rules while keeping network use an explicit operator choice.
+
+## Components
 
 | Module | Responsibility |
 |---|---|
-| `config.py` | Pydantic models for the project file (`ProjectConfig`), `.env` loading, path resolution |
-| `schema.py` | Field definitions (`FieldDef`, `Schema`), built-in schemas in `schemas/*.yaml` |
-| `models.py` | `Record` with per-field `FieldValue` (value, source, status, note, candidates), `RawRecord`, `DuplicateGroup`, status enums |
-| `http.py` | `HttpClient`: retries, per-host delay, robots.txt, sqlite cache (`requests-cache`), size-limited `fetch()` that never raises |
-| `sources/` | `BaseSource` + registry; one module per source; `nominatim.py` resolves place names to Overpass areas |
-| `enrich/website.py` | Fetch home + contact pages, extract e-mails/phones/socials/VAT/description, name match |
-| `enrich/search.py` | `WebSearch` (Google CSE / DuckDuckGo), directory filtering, best-candidate scoring |
-| `enrich/vies.py` | VIES REST client with transient-error retries and caching |
-| `processing/normalize.py` | Canonical formats; pure functions, no network |
-| `processing/validate.py` | Schema rules + cross-field checks |
-| `processing/verify.py` | Mail-domain checker (DNS + DoH), phone check, record status and completeness |
-| `processing/dedupe.py` | Blocking, pairwise comparison, union-find clustering, merge policy |
-| `pipeline.py` | Orchestrates the stages, applies enrichment results to records, progress callbacks, output paths |
-| `report.py` | `RunReport`: stages, counts, completeness, flags -> Markdown/JSON, and the Run Log sheet |
-| `export/` | `columns.py` (shared layout), `excel.py`, `flat.py` (CSV/JSON), `gsheets.py` |
-| `qa.py` | Audit of existing spreadsheets (map columns -> normalise -> validate -> dedupe, flag only) |
-| `cli.py` | Typer commands: run, validate, sources, schemas, projects, init, gsheets, ui |
-| `app/streamlit_app.py` | Dashboard on top of `Pipeline` |
+| `models.py`, `schema.py` | Field values with status/source/candidates; configurable schema |
+| `sources/csv_import.py` | Bounded table ingestion; structural input validation |
+| `qa.py` | Offline audit orchestration and field mapping |
+| `processing/` | Normalization, validation, DNS/phone checks and duplicate matching |
+| `workspace.py` | Transactional snapshots, review event log, comparison and approved export |
+| `workspace_cli.py`, `dashboard.py` | Product entrypoints |
+| `sources/`, `enrich/`, `pipeline.py` | Original extraction adapters and orchestration |
+| `network.py`, `http.py` | Destination validation, redirect policy, robots rules, HTTP/cache controls |
+| `export/`, `report.py` | Spreadsheet/JSON research delivery and reports |
 
-## Design choices
+## Storage and identity
 
-- **Provenance first.** Every value carries where it came from and why it is trusted, so the spreadsheet
-  can explain itself and a reviewer can resolve conflicts without re-researching.
-- **Never guess.** Enrichment may *add* values, but a value found by search or on a page is only
-  `verified` when an independent signal confirms it (name on page, VIES answer, second source).
-- **Fail soft.** A dead website, a rate-limited search or an unavailable service becomes a status and a
-  warning in the report - it never aborts the run or drops the record.
-- **Config over code.** New tasks are new YAML files: sources, tags, selectors, thresholds, outputs.
-  New websites need selectors, not code (`html_list`).
-- **Testable offline.** All network calls go through `HttpClient`, so the suite mocks them with recorded
-  responses and runs in seconds without internet.
-- **Cross-platform.** Pure Python, UTF-8 everywhere, no shell dependencies; tested on Windows paths via
-  `pathlib`.
+Each SQLite database is an operator-owned workspace. `runs` contains immutable normalized records,
+schema, report, input name, SHA-256 fingerprint and creation time. It does not retain the original
+uploaded file; evidence includes field candidates and raw metadata produced by the audit.
 
-## Adding a source
+`reviews` holds the latest decision for each `(run_id, record_id)`. `events` records every successful
+change. A transaction and expected revision protect against concurrent updates. Reviewer names are
+operator-entered labels. This is a local change history, not a tamper-proof or authenticated audit log.
+Deleting a run cascades to its reviews/events. Filesystem backups may retain deleted data.
 
-1. Create `src/dataharvest/sources/my_source.py` with a class deriving from `BaseSource`, set `type`,
-   `description`, `requires_env` and implement `extract()` yielding `RawRecord`s whose `values` use
-   schema field names.
-2. Decorate it with `@register` and add the import to `sources/base.py::_ensure_loaded`.
-3. Add a fixture and a test in `tests/test_sources.py`.
+Row IDs identify records within a run. Cross-run comparison uses the caller-selected schema field
+(`account_id` by default), requires a valid unique value on every record, and refuses cross-project or
+schema-mismatched comparisons. Changes to identity values appear as removal/addition; the application
+does not guess that they describe the same entity. Approval never propagates to a new snapshot.
+
+## Decision semantics
+
+Approving a record does not modify values or automatic verification status. Approval is blocked for
+missing required fields, invalid/conflicting fields, and excluded/merged records. Other flags require an
+explanation. The operator corrects the source list and re-imports when a blocking problem exists.
+
+A duplicate candidate can be acknowledged as a distinct location with a note. That does not resolve or
+merge other group members automatically. Approved CSV contains the original status and reviewer metadata.
+
+## Operating boundaries
+
+- Local trusted operator; separate OS permissions/databases for separate customers.
+- 5,000 input records, 200 columns, 20 MiB input, 100 MiB expanded XLSX.
+- 250,000 duplicate candidate pairs; exceeding the budget raises an error.
+- CSV formula mitigation affects text representation; evidence JSON preserves normalized values.
+- Public-address checks happen before requests and redirect hops. They do not pin connections to a
+  resolved address; DNS rebinding/proxy resolution need outbound network enforcement.
+- Robots rules apply per destination. Missing robots files permit collection; unavailable/denied files defer it.
+- Ordinary site requests are bounded by timeouts/retries and a 3 MB page-body limit. Trusted source API
+  responses use adapter-specific limits and are not a general arbitrary-upload service.
+- The HTTP cache is local and may contain extracted data; expired entries are not silently served after errors.
+- There is no job scheduler, SaaS tenant boundary, SSO, billing or contractual SLA in this release.

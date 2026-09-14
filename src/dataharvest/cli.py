@@ -23,6 +23,7 @@ from rich.table import Table
 from . import __version__
 from .config import ProjectConfig, load_project
 from .models import RecordStatus
+from .workspace_cli import app as workspace_app
 
 app = typer.Typer(
     name="dataharvest",
@@ -31,6 +32,7 @@ app = typer.Typer(
     add_completion=False,
     rich_markup_mode="rich",
 )
+app.add_typer(workspace_app, name="workspace")
 console = Console()
 err_console = Console(stderr=True)
 
@@ -78,7 +80,7 @@ def _resolve_project(project: str) -> Path:
 @app.command()
 def run(
     project: str = typer.Argument(..., help="Project YAML file (or its name in ./projects)."),
-    limit: int = typer.Option(0, "--limit", "-n", help="Stop after N records (quick test runs)."),
+    limit: int = typer.Option(0, "--limit", "-n", min=0, help="Stop after N records (quick test runs)."),
     offline: bool = typer.Option(False, "--offline", help="Skip all enrichment/verification that needs the network."),
     no_cache: bool = typer.Option(False, "--no-cache", help="Ignore the HTTP cache (always fetch fresh pages)."),
     output_dir: Path | None = typer.Option(None, "--out", "-o", help="Override the output directory."),
@@ -121,7 +123,7 @@ def run(
     with progress:
         try:
             result = pipeline.run(export=not no_export)
-        except SourceError as exc:
+        except (SourceError, ValueError, OSError) as exc:
             err_console.print(f"[red]Extraction failed:[/red] {exc}")
             for w in pipeline.report.warnings:
                 err_console.print(f"  - {w}")
@@ -129,6 +131,8 @@ def run(
         except KeyboardInterrupt:
             err_console.print("[yellow]Interrupted - no files were written.[/yellow]")
             raise typer.Exit(130) from None
+        finally:
+            pipeline.http.close()
 
     _print_summary(result)
 
@@ -168,7 +172,7 @@ def validate(
     schema: str = typer.Option("leads", "--schema", "-s", help="Built-in schema name or a schema YAML file."),
     country: str = typer.Option("BE", "--country", "-c", help="Country whose phone/postcode/VAT rules apply."),
     output: Path | None = typer.Option(None, "--out", "-o", help="Where to write the audit workbook (.xlsx)."),
-    similarity: int = typer.Option(90, "--similarity", help="Name similarity (50-100) for duplicate detection."),
+    similarity: int = typer.Option(90, "--similarity", min=50, max=100, help="Name similarity (50-100) for duplicate detection."),
     mapping: list[str] = typer.Option([], "--map", "-m", help='Column mapping "Column name=field", repeatable (e.g. -m "Tel=phone").'),
     optional: list[str] = typer.Option([], "--optional", help="Treat a required schema field as optional for this audit (repeatable)."),
 ) -> None:
@@ -190,6 +194,8 @@ def validate(
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from None
     out = output or file.with_name(f"{file.stem}_audit.xlsx")
+    if out.resolve() == file.resolve():
+        raise typer.BadParameter("The audit output must not overwrite the input file.")
     export_excel(out, result.records, result.groups, result.report, result.schema,
                  {"name": file.stem, "title": result.report.project_title, "country": country}, include_excluded=True)
     console.rule(f"[bold]Audit of {file.name}[/bold]")
@@ -366,6 +372,12 @@ def init(
     """Create a new project file from a template."""
     if template not in TEMPLATES:
         raise typer.BadParameter(f"unknown template '{template}'. Choose from: {', '.join(TEMPLATES)}")
+    from .config import ProjectInfo
+
+    try:
+        name = ProjectInfo(name=name).name
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{name}.yaml"
     if path.exists():
@@ -406,7 +418,7 @@ def gsheets(
 @app.command()
 def ui(port: int = typer.Option(8501, "--port")) -> None:
     """Open the browser dashboard (Streamlit) to run projects and download results."""
-    app_path = Path(__file__).resolve().parents[2] / "app" / "streamlit_app.py"
+    app_path = Path(__file__).resolve().with_name("dashboard.py")
     if not app_path.exists():
         err_console.print(f"[red]dashboard not found at {app_path}[/red]")
         raise typer.Exit(2)
@@ -415,7 +427,7 @@ def ui(port: int = typer.Option(8501, "--port")) -> None:
     except ImportError:
         err_console.print("[red]Streamlit is not installed:[/red] pip install streamlit pandas")
         raise typer.Exit(2) from None
-    cmd = [sys.executable, "-m", "streamlit", "run", str(app_path), "--server.port", str(port), "--browser.gatherUsageStats", "false"]
+    cmd = [sys.executable, "-m", "streamlit", "run", str(app_path), "--server.port", str(port), "--server.address", "127.0.0.1", "--browser.gatherUsageStats", "false", "--theme.primaryColor", "#087f75", "--theme.base", "light"]
     raise typer.Exit(subprocess.call(cmd))
 
 

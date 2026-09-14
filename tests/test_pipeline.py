@@ -102,8 +102,8 @@ def test_full_run(leads_project, http, fake_dns):
 
     # --- conflict between source and website is flagged, not silently overwritten
     thai = by_name["Thai Lin"]
-    assert thai.get("email") == "info@thailin.be" and thai.field_status("email") == FieldStatus.CONFLICT
-    assert "info@y-notthai.com" in thai.fields["email"].candidates
+    assert thai.get("email") == "info@thailin.be" and thai.field_status("email") == FieldStatus.UNVERIFIED
+    assert "info@y-notthai.com" not in thai.fields["email"].candidates
     assert thai.status == RecordStatus.NEEDS_REVIEW
 
     # --- dead / unreachable websites
@@ -134,16 +134,16 @@ def test_full_run(leads_project, http, fake_dns):
     excluded = [r for r in records if r.status == RecordStatus.EXCLUDED and not r.duplicate_of]
     assert len(excluded) == 4 and all("missing company name" in " ".join(r.flags) for r in excluded)
 
-    # --- two entries with the same name and website but different addresses: merged, address conflict flagged
+    # --- separate branches keep both records and require review
     btc = [r for r in records if r.get("company_name") == "Bistro Tout Court"]
-    assert len(btc) == 2 and sum(1 for r in btc if r.duplicate_of) == 1
+    assert len(btc) == 2 and sum(1 for r in btc if r.duplicate_of) == 0
     master = next(r for r in btc if not r.duplicate_of)
-    assert master.status == RecordStatus.NEEDS_REVIEW and any("disagree on" in f and "street" in f for f in master.flags)
+    assert master.status == RecordStatus.NEEDS_REVIEW and any("conflicting location" in f for f in master.flags)
 
     # --- report and outputs
     rep = result.report
-    assert rep.records_total == 60 and rep.records_delivered == 60 - 4 - 2
-    assert rep.status_counts["EXCLUDED"] == 6
+    assert rep.records_total == 60 and rep.records_delivered == 60 - 4 - 1
+    assert rep.status_counts["EXCLUDED"] == 5
     assert set(result.outputs) >= {"xlsx", "csv", "json", "report_md", "report_json"}
     for p in result.outputs.values():
         assert p.exists()

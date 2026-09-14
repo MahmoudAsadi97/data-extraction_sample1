@@ -15,13 +15,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib import robotparser
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from . import __version__
+from .network import UnsafeURL, validate_public_url
 
 log = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ class HttpClient:
                     allowable_methods=("GET", "POST"),
                     allowable_codes=(200, 203, 300, 301, 302, 404, 410),
                     filter_fn=cacheable,
-                    stale_if_error=True,
+                    stale_if_error=False,
                 )
             except Exception as exc:  # pragma: no cover - cache is optional
                 log.warning("HTTP cache unavailable (%s); continuing without cache", exc)
@@ -127,7 +128,7 @@ class HttpClient:
         session.mount("https://", site_adapter)
         session.mount("http://", site_adapter)
         for host in API_HOSTS:  # longest prefix wins in requests, so these override the defaults above
-            session.mount(f"https://{host}", api_adapter)
+            session.mount(f"https://{host}/", api_adapter)
         return session
 
     # ------------------------------------------------------------------ politeness
@@ -148,7 +149,7 @@ class HttpClient:
             self._last_request[host] = time.monotonic()
 
     def allowed_by_robots(self, url: str) -> bool:
-        """Check robots.txt for the URL (cached per host). Failures are treated as *allowed*."""
+        """Check the matching agent rule; unavailable robots files defer collection."""
         if not self.respect_robots:
             return True
         parsed = urlparse(url)
@@ -158,40 +159,58 @@ class HttpClient:
         if cached == "unset":
             rp: robotparser.RobotFileParser | None = robotparser.RobotFileParser()
             try:
-                resp = self.session.get(f"{host}/robots.txt", timeout=min(self.timeout, 10))
-                if resp.status_code == 200 and resp.text:
+                resp = self.fetch(f"{host}/robots.txt", timeout=min(self.timeout, 10), check_robots=False)
+                if resp.status == 200 and resp.text:
                     rp.parse(resp.text.splitlines())
-                else:
+                elif resp.status in (404, 410):
                     rp = None
+                else:
+                    rp.parse(["User-agent: *", "Disallow: /"])
             except Exception:
-                rp = None
+                rp.parse(["User-agent: *", "Disallow: /"])
             with self._lock:
                 self._robots[host] = rp
             cached = rp
         if cached is None:
             return True
         try:
-            return cached.can_fetch(self.user_agent, url) or cached.can_fetch("*", url)
+            return cached.can_fetch(self.user_agent, url)
         except Exception:
-            return True
+            return False
 
     # ------------------------------------------------------------------ requests
     def get(self, url: str, *, params: dict | None = None, headers: dict | None = None,
             timeout: float | None = None, min_delay: float | None = None, allow_redirects: bool = True,
             check_robots: bool = False, stream: bool = False, use_cache: bool = True) -> requests.Response:
         """Low-level GET with politeness. Raises requests exceptions."""
-        if check_robots and not self.allowed_by_robots(url):
-            raise PermissionError(f"Blocked by robots.txt: {url}")
-        self._wait_for_host(urlparse(url).netloc, min_delay)
-        with self._cache_scope(use_cache):
-            return self.session.get(url, params=params, headers=headers, timeout=timeout or self.timeout,
-                                    allow_redirects=allow_redirects, stream=stream)
+        for _ in range(6):
+            validate_public_url(url)
+            if check_robots and not self.allowed_by_robots(url):
+                raise PermissionError(f"Blocked by robots.txt: {url}")
+            self._wait_for_host(urlparse(url).netloc, min_delay)
+            with self._cache_scope(use_cache):
+                response = self.session.get(url, params=params, headers=headers, timeout=timeout or self.timeout,
+                                            allow_redirects=False, stream=stream)
+            if not allow_redirects or not response.is_redirect:
+                return response
+            target = urljoin(response.url, response.headers["Location"])
+            response.close()
+            if urlparse(target).netloc != urlparse(url).netloc:
+                headers = None  # never forward caller API credentials to another origin
+            url, params = target, None
+        raise requests.TooManyRedirects("Redirect limit exceeded (5 hops)")
 
     def post(self, url: str, *, data=None, json=None, headers: dict | None = None,
              timeout: float | None = None, min_delay: float | None = None, use_cache: bool = True) -> requests.Response:
+        validate_public_url(url)
         self._wait_for_host(urlparse(url).netloc, min_delay)
         with self._cache_scope(use_cache):
-            return self.session.post(url, data=data, json=json, headers=headers, timeout=timeout or self.timeout)
+            response = self.session.post(url, data=data, json=json, headers=headers, timeout=timeout or self.timeout,
+                                         allow_redirects=False)
+        if response.is_redirect:
+            response.close()
+            raise UnsafeURL("API POST redirects are not followed")
+        return response
 
     def _cache_scope(self, use_cache: bool):
         """Context manager that bypasses the on-disk cache for one request when asked."""
@@ -207,16 +226,19 @@ class HttpClient:
         if not url.lower().startswith(("http://", "https://")):
             url = "https://" + url
         try:
+            validate_public_url(url)
             if check_robots and not self.allowed_by_robots(url):
                 return FetchResult(url=url, ok=False, error="blocked by robots.txt", blocked=True)
-            resp = self.get(url, timeout=timeout, min_delay=min_delay, headers=headers, stream=True)
+            resp = self.get(url, timeout=timeout, min_delay=min_delay, headers=headers, stream=True, check_robots=check_robots)
             ctype = resp.headers.get("Content-Type", "")
             body = b""
-            for chunk in resp.iter_content(chunk_size=65536):
-                body += chunk
-                if len(body) > MAX_BYTES:
-                    break
-            resp.close()
+            try:
+                for chunk in resp.iter_content(chunk_size=65536):
+                    body += chunk
+                    if len(body) > MAX_BYTES:
+                        return FetchResult(url=url, ok=False, error="page exceeds 3 MB limit", blocked=True)
+            finally:
+                resp.close()
             text = decode_body(body, ctype)
             return FetchResult(
                 url=url,
@@ -229,6 +251,8 @@ class HttpClient:
                 elapsed=time.monotonic() - started,
                 blocked=resp.status_code in (401, 403, 429, 503) and _looks_like_challenge(resp, text),
             )
+        except (UnsafeURL, PermissionError) as exc:
+            return FetchResult(url=url, ok=False, error=str(exc), blocked=True)
         except requests.exceptions.SSLError as exc:
             return FetchResult(url=url, ok=False, error=f"ssl error: {_short(exc)}", elapsed=time.monotonic() - started)
         except requests.exceptions.ConnectionError as exc:

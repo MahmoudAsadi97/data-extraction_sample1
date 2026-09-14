@@ -33,7 +33,7 @@ def _write(pipeline: Pipeline, kind: str, path: Path, writer) -> Path | None:
             return None
 
 
-def export_all(pipeline: Pipeline) -> dict[str, Path]:
+def export_all(pipeline: Pipeline) -> dict[str, Path | str]:
     cfg = pipeline.config
     directory, basename = pipeline.output_paths()
     directory.mkdir(parents=True, exist_ok=True)
@@ -58,7 +58,7 @@ def export_all(pipeline: Pipeline) -> dict[str, Path]:
             url = export_google_sheets(pipeline.records, pipeline.groups, pipeline.schema,
                                        title=gs.title or cfg.project.title, spreadsheet_id=gs.spreadsheet_id, share_with=gs.share_with)
             pipeline.report.outputs["google_sheets"] = url
-            outputs["google_sheets"] = Path(url)
+            outputs["google_sheets"] = url
         except GoogleSheetsUnavailable as exc:
             pipeline.report.warn(f"Google Sheets export skipped: {exc}")
         except Exception as exc:  # network / API errors must not lose the local files

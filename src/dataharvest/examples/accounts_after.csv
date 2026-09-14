@@ -1,0 +1,7 @@
+Account ID,Company name,Website,Email,Phone,Street,House number,Postcode,City,Country,Category
+AC-004,Northline Demo Leuven,https://northline.example.org,hello@northline.example.org,+3256205588,Example Street,40,3000,Leuven,BE,Wholesale
+AC-001,Northline Demo,https://northline.example.org,sales@northline.example.org,+3256205588,Example Street,10,8500,Kortrijk,BE,Wholesale
+AC-002,Harbour Demo,https://harbour.example.org,hello@harbour.example.org,+3216205588,Example Avenue,20,3000,Leuven,BE,Services
+AC-003,Meadow Demo,https://meadow.example.org,info@meadow.example.org,,Sample Lane,3,9000,Gent,BE,Retail
+AC-005,Bridge Demo,https://bridge.example.org,info@bridge.example.org,,Sample Lane,5,1000,Brussels,BE,Services
+AC-007,Cedar Demo,https://cedar.example.org,info@cedar.example.org,,Sample Lane,7,3500,Hasselt,BE,Services

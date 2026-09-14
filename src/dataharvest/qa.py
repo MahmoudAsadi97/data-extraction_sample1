@@ -41,6 +41,9 @@ class AuditResult:
 def map_columns(headers: list[str], schema: Schema, mapping: dict[str, str] | None = None) -> tuple[dict[str, str], list[str]]:
     """Map spreadsheet headers to schema fields by explicit mapping, label, name or common aliases."""
     mapping = {k.strip().lower(): v for k, v in (mapping or {}).items()}
+    for header, target in mapping.items():
+        if header not in {h.strip().lower() for h in headers} or not schema.field(target):
+            raise ValueError(f"Invalid column mapping: {header} -> {target}")
     by_label = {f.display.strip().lower(): f.name for f in schema.fields}
     by_name = {f.name.lower(): f.name for f in schema.fields}
     result: dict[str, str] = {}
@@ -48,7 +51,9 @@ def map_columns(headers: list[str], schema: Schema, mapping: dict[str, str] | No
     for header in headers:
         key = header.strip().lower()
         target = mapping.get(key) or by_label.get(key) or by_name.get(key) or AUTO_MAPPING.get(key)
-        if target and schema.field(target) and target not in result.values():
+        if target and schema.field(target) and target in result.values():
+            raise ValueError(f"Multiple columns map to '{target}'; resolve the ambiguity before importing.")
+        if target and schema.field(target):
             result[header] = target
         else:
             ignored.append(header)
@@ -89,7 +94,7 @@ def audit_file(path: str | Path, schema_ref: str | dict | None = "leads", *, cou
     problems = 0
     for rec in records:
         normalize_record(rec, schema, country)
-        problems += len(validate_record(rec, schema, country, ignore_missing=absent_required))
+        problems += len(validate_record(rec, schema, country))
     report.finish(stage, len(records), f"{problems} problem(s)")
 
     stage = report.start("duplicates", len(records))
@@ -100,7 +105,7 @@ def audit_file(path: str | Path, schema_ref: str | dict | None = "leads", *, cou
 
     for rec in records:
         compute_completeness(rec, schema)
-        assign_record_status(rec, schema, ignore_missing=absent_required)
+        assign_record_status(rec, schema)
         if rec.status == RecordStatus.EXCLUDED:
             rec.status = RecordStatus.NEEDS_REVIEW  # nothing is dropped from an audit; everything is reported
     if ignored:
