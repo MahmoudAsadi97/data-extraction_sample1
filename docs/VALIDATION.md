@@ -7,7 +7,7 @@ Validated on 14 September 2026. Base repository commit: `17eb0626f24395b8269c6fc
 | Check | Outcome | Scope |
 |---|---|---|
 | Baseline test suite | 118 passed; 87% coverage | Original repository before changes |
-| Expanded suite | **187 passed**, **85.64% coverage** | Linux, Python 3.12; all offline tests; 80% minimum gate passed |
+| Expanded suite | **187 passed**, **85.65% coverage** | Linux, Python 3.12; all offline tests; 80% minimum gate passed |
 | Ruff | Passed | Application, tests, app launcher and scripts |
 | Dependency audit | No known vulnerabilities found | Installed locked environment, editable project excluded; vulnerability database is time-dependent |
 | Build | Source distribution and wheel built | Package resources and entrypoints included |
@@ -23,6 +23,8 @@ formula payloads, numeric edge cases, location conflicts, large duplicate blocks
 persistence, concurrent decisions and approval-only export.
 Native mail-DNS responses are mocked explicitly, including timeout and Null MX cases. An unexpected
 native DNS lookup fails an offline test instead of depending on the machine's network environment.
+Output-name isolation is tested with a frozen clock, covering systems where consecutive runs receive
+the same timestamp.
 
 ## Known verification boundaries
 

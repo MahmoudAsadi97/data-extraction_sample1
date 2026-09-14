@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from rapidfuzz import fuzz
 
@@ -73,7 +74,8 @@ class Pipeline:
         self.records: list[Record] = []
         self.groups: list[DuplicateGroup] = []
         self.dns_broken = False
-        self._output_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S_%f")
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
+        self._output_stamp = f"{stamp}_{uuid4().hex}"
 
     # ================================================================== orchestration
     def run(self, export: bool = True) -> PipelineResult:

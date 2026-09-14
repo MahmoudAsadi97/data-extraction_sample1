@@ -191,7 +191,15 @@ def test_output_path_slugs_reject_traversal(slug):
         OutputConfig(basename=slug)
 
 
-def test_timestamped_outputs_do_not_collide(leads_project, http):
+def test_timestamped_outputs_do_not_collide(leads_project, http, monkeypatch):
+    from datetime import datetime, timezone
+
+    class FrozenClock:
+        @staticmethod
+        def now(tz):
+            return datetime(2026, 9, 14, 12, 0, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr("dataharvest.pipeline.datetime", FrozenClock)
     leads_project.output.timestamp = True
     a, b = Pipeline(leads_project, http=http), Pipeline(leads_project, http=http)
     assert a.output_paths() == a.output_paths()

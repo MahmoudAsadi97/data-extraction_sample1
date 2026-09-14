@@ -50,7 +50,7 @@ business register. Those require capabilities and evidence the current project d
 | Whole missing required columns ignored for row status | Incomplete lists could look acceptable | Missing requirements block approval unless schema explicitly makes them optional |
 | CSV text could be interpreted as formulas | Spreadsheet injection and changed data interpretation | Escape risky text; retain exact evidence separately |
 | Import silently overwrote duplicate headers | Undetected information loss | Reject ambiguous headers, mappings and malformed rows |
-| Day-only output filename | Subsequent run overwrote prior outputs | Per-run timestamp with microseconds |
+| Day-only output filename | Subsequent run overwrote prior outputs | Per-run timestamp plus a unique run identifier, independent of clock resolution |
 | UI lived outside package | Wheel installation could not start dashboard | Dashboard and sample assets included in package |
 | No dependency lock | Behavior changed with fresh installs | Universal `uv.lock` and locked CI installs |
 
