@@ -124,11 +124,32 @@ def test_doh_null_mx_rejects_mail(http):
     assert MailDomainChecker(http)._resolve_doh("example.org").deliverable is False
 
 
-def test_unavailable_dns_keeps_existing_conflict():
+def test_unavailable_dns_keeps_existing_conflict(monkeypatch):
+    import dns.exception
+
+    def timeout(*args, **kwargs):
+        raise dns.exception.Timeout()
+
+    monkeypatch.setattr("dns.resolver.Resolver.resolve", timeout)
     rec = record(email="info@example.org")
     rec.mark("email", FieldStatus.CONFLICT)
     verify_email_field(rec, MailDomainChecker(None))
     assert rec.field_status("email") == FieldStatus.CONFLICT
+    assert rec.checks["email_domain"]["deliverable"] is None
+
+
+def test_native_null_mx_rejects_mail_without_address_fallback(monkeypatch):
+    from types import SimpleNamespace
+
+    def null_mx(self, domain, query_type):
+        assert query_type == "MX", "Null MX must not fall back to an address lookup"
+        return [SimpleNamespace(exchange=".")]
+
+    monkeypatch.setattr("dns.resolver.Resolver.resolve", null_mx)
+    rec = record(email="info@example.org")
+    verify_email_field(rec, MailDomainChecker(None))
+    assert rec.field_status("email") == FieldStatus.INVALID
+    assert rec.checks["email_domain"]["deliverable"] is False
 
 
 @pytest.mark.parametrize("content", ["Company,Company\nA,B\n", "Company,,Email\nA,B,C\n", "Company,Email\nA,B,C\n", "Company,Email\nA\n"])

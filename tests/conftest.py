@@ -67,3 +67,8 @@ def fixture_dns(request, monkeypatch):
     """Recorded HTTP tests use deterministic public DNS; network tests use real DNS."""
     if request.node.get_closest_marker("network") is None:
         monkeypatch.setattr("dataharvest.network._resolve", lambda host, port: ["93.184.216.34"])
+
+        def unmocked_mail_dns(*args, **kwargs):
+            pytest.fail("Offline tests must supply a recorded mail-DNS response")
+
+        monkeypatch.setattr("dns.resolver.Resolver.resolve", unmocked_mail_dns)
